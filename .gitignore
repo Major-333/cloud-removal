@@ -1,3 +1,10 @@
 baselines/
+media/
 *.log
 *.ipynb
+*__pycache__*
+*wandb*
+*.yaml
+*.png
+*.out
+*test_*

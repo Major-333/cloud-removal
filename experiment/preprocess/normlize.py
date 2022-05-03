@@ -23,8 +23,7 @@ def normlize_to_uint8_foreach_channel(data: array) -> array:
     total_channels = data.shape[1]
     for index in range(total_channels):
         data_slice = data[:, index, :, :]
-        data[:, index, :, :] = (data_slice - np.min(data_slice)) / \
-            (np.max(data_slice) - np.min(data_slice) + 1e-10) * 255
+        data[:, index, :, :] = (data_slice - np.min(data_slice)) / (np.max(data_slice) - np.min(data_slice) + 1e-10) * 255
     return data.astype('uint8')
 
 

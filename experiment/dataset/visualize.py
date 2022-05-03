@@ -58,7 +58,8 @@ def visualize_output_with_groundtruth_only_rgb(ground_truth: array, output: arra
         plt.clf()
         mpl.rcParams.update(mpl.rcParamsDefault)
         if len(ground_truth.shape) == 4 and len(output.shape) == 4:
-            sample = np.random.choice(output.shape[0], 1)[0]
+            # sample = np.random.choice(output.shape[0], 1)[0]
+            sample = 0
             ground_truth = ground_truth[sample, :, :, :]
             output = output[sample, :, :, :]
             input = input[sample, :, :, :]

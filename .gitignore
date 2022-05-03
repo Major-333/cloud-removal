@@ -8,3 +8,4 @@ media/
 *.png
 *.out
 *test_*
+experiment/data*

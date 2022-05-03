@@ -14,10 +14,13 @@ class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1, scale=0.1):
         super(ResidualBlock, self).__init__()
         self.scale = scale
+        # self.block = nn.Sequential(nn.Conv2d(inchannel, outchannel, kernel_size=3, stride=stride, padding=1),
+        #                            nn.BatchNorm2d(outchannel), nn.ReLU(inplace=True),
+        #                            nn.Conv2d(outchannel, outchannel, kernel_size=3, padding=1),
+        #                            nn.BatchNorm2d(outchannel))
         self.block = nn.Sequential(nn.Conv2d(inchannel, outchannel, kernel_size=3, stride=stride, padding=1),
-                                   nn.BatchNorm2d(outchannel), nn.ReLU(inplace=True),
-                                   nn.Conv2d(outchannel, outchannel, kernel_size=3, padding=1),
-                                   nn.BatchNorm2d(outchannel))
+                                   nn.ReLU(inplace=True),
+                                   nn.Conv2d(outchannel, outchannel, kernel_size=3, padding=1))
         self.shortcut = nn.Sequential()
 
     def forward(self, x):

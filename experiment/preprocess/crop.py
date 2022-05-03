@@ -11,6 +11,7 @@ def crop_triplets_image(image3ds: List[array], output_size: Tuple[int, int]) -> 
         raise ValueError(
             f'failed to image crop: image shape is invalid:{image3ds[0].shape}, {image3ds[1].shape}, {image3ds[2].shape}'
         )
+    # image shape: c, h, w
     in_h, in_w = image3ds[0].shape[1], image3ds[0].shape[2]
     out_h, out_w = output_size
     if in_h < out_h or in_w < out_w:
@@ -19,6 +20,6 @@ def crop_triplets_image(image3ds: List[array], output_size: Tuple[int, int]) -> 
         )
     left_top_h = random.randint(0, in_h - out_h)
     left_top_w = random.randint(0, in_w - out_w)
-    cropped_images = [img[:, left_top_h:left_top_h + out_h, left_top_w:left_top_w + out_w] for img in image3ds]
-    return cropped_images
+    cropped_images = [img[:, left_top_h:left_top_h + out_h, left_top_w:left_top_w + out_w] for img in image3ds] # for-loop for triple
+    return cropped_images # len is 3
 

@@ -25,11 +25,12 @@ class Evaluater(object):
         self._init_helper = InitHelper(self._config)
 
     def _setup(self):
-        self.train_loader = self._init_helper.init_dsen2cr_dataloader(self.config['test_dir'])
-        self.test_loader = self._init_helper.init_dsen2cr_dataloader(self.config['train_dir'])
-        self.model = self.init_helper.init_model()
+        self.train_loader = self._init_helper.init_dsen2cr_dataloader(self._config['train_dir'])
+        self.test_loader = self._init_helper.init_dsen2cr_dataloader(self._config['test_dir'])
+        self.model = self._init_helper.init_model()
 
     def evaluate_checkpoint(self, checkpoint_path: str) -> Dict:
+        self._setup()
         logging.info(f'will evaluate the checkpoint:{checkpoint_path}')
         print(f'model state:\n{self.model.state_dict().keys()}')
         trained_model = load_ddp_checkpoint(self.model, checkpoint_path, self._device)

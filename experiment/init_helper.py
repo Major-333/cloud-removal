@@ -76,7 +76,7 @@ class InitHelper(object):
         min_lr, total_epochs = self.config['min_lr'], self.config['epochs']
         warmup_epochs = 3
         # 3-500 完成一次余弦
-        scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, 20, eta_min=min_lr)
+        scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, 30, eta_min=min_lr)
         # 3 warmuo
         scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
         scheduler.step()
@@ -123,4 +123,4 @@ class DDPInitHelper(InitHelper):
 
     def init_model(self) -> nn.Module:
         model = super().init_model()
-        return DDP(model, device_ids=[self.rank])
+        return DDP(model, device_ids=[self.rank], find_unused_parameters=True)

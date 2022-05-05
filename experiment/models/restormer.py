@@ -282,10 +282,8 @@ class Restormer(nn.Module):
         return out_dec_level1
 
 if __name__ == '__main__':
-    fake_input = torch.rand(8, 15, 256, 256).cuda() # N C H W
-
+    fake_input = torch.rand(8, 15, 128, 128) # N C H W
     print(fake_input.shape)
     net = Restormer()
-    net = net.cuda()
     output = net(fake_input)
     print(output.shape)

@@ -75,25 +75,22 @@ class Trainer(object):
                 self.model.train()
                 for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
                     self.optimizer.zero_grad()
-                    logging.info(f'{len(data_batch)}')
                     cloudy, ground_truth, patch_info = data_batch
                     cloudy, ground_truth = cloudy.cuda().float(), ground_truth.cuda().float()
                     output = self.model(cloudy)
                     loss = self._get_loss(output, ground_truth)
                     loss.backward()
                     self.optimizer.step()
-                    epoch_loss += loss.item()
-                    logs = {'loss': loss}
-                    logs = logs | self._get_metric_log(output, ground_truth)
-                    if index % wandb.config['visual_freq'] == 0:
-                        media_logs = self._get_media_log(epoch, index, output, cloudy, ground_truth, patch_info)
-                        logs = logs | media_logs
-                    wandb.log(logs)
+                    epoch_loss += loss
+                logs = {'epoch_loss': epoch_loss.item()}
+                if epoch % wandb.config['visual_freq'] == 0:
+                    media_logs = self._get_media_log(epoch, index, output, cloudy, ground_truth, patch_info)
+                    logs = logs | media_logs
                 if index % wandb.config['validate_freq'] == 0 and rank == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
-                    logs = {'learning rate': self.optimizer.param_groups[0]['lr']}
+                    logs = logs | {'learning rate': self.optimizer.param_groups[0]['lr']}
                     logs = logs | metric
-                    wandb.log(logs)
+                wandb.log(logs)
                 save_checkpoints(self.model, epoch, rank, start_time=START_TIME)
                 self.scheduler.step()   
         except Exception as e:

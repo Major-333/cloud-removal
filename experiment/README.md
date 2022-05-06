@@ -7,38 +7,42 @@ python preprocess.py -i {`ORIGIN_DIR`} -o {`PREPROCESSED_DIR`}
 1. config wandb yaml
 eg:
 ```yaml
-name:
-  value: 'mprnet_0428'
 model:
-  value: 'Restormer'
+  value: 'Test'
 epochs:
   value: 800
 batch_size:
-  value: 2
-scheduler:
-  value: GradualWarmupScheduler
+  value: 12 
 loss_fn:
   value: 'CharbonnierLoss'
+val_percent:
+  value: 0.2
+# >>> learning rate >>>
+scheduler:
+  value: GradualWarmupScheduler
 lr:
   value: 0.0002
 min_lr:
   value: 0.000001
+T_max:
+  value: 60
+# <<< learning rate <<<
 feature_dim:
   value: 256
+# per batch
 visual_freq:
   value: 500
+# per epoch
 validate_freq:
   value: 1
 train_dir:
-  value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/SEN12MS_CR_PROCESSED_V3/TRAIN'
+  value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/SEN12MS_CR_PROCESSED_V4/TRAIN'
 test_dir:
-  value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/SEN12MS_CR_PROCESSED_V3/TEST'
+  value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/SEN12MS_CR_PROCESSED_V4/TEST'
 media_dir:
   value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/media'
 checkpoints_dir:
   value: '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/checkpoints'
-val_percent:
-  value: 0.2
 in_channels:
   value: 15
 feature_dim:

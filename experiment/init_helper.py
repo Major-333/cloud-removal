@@ -4,9 +4,10 @@ import os
 import yaml
 import wandb
 import torch
-from torch import nn, tensor, optim, distributed as dist, multiprocessing as mp
+from torch import index_copy, nn, tensor, optim, distributed as dist, multiprocessing as mp
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DataParallel as DP
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
@@ -41,11 +42,17 @@ def init_wandb(rank: int, group: str) -> Dict:
     logging.info(f'config is:{config}')
     return config
 
+def init_wandb_in_dp(group: str) -> Dict:
+    wandb.init(project='cloud removal', group=group, job_type='DP mode')
+    config = wandb.config
+    logging.info(f'config is:{config}')
+    return config
+
 class InitHelper(object):
     def __init__(self, config: Dict) -> None:
         self.config = config
 
-    def init_train_dsen2cr_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
+    def init_train_val_dsen2cr_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
         scene_black_list = self.config['scene_black_list']
         scene_white_list = self.config['scene_white_list']
         dataset = Dsen2crDataset(self.config['train_dir'],
@@ -91,6 +98,12 @@ class InitHelper(object):
         model = model.cuda()
         return model
 
+class DPInitHelper(InitHelper):
+    def init_model(self) -> nn.Module:
+        model = super().init_model()
+        gpu_list = os.getenv('CUDA_VISIBLE_DEVICES').split(',')
+        logging.info(f'using gpu:{gpu_list}')
+        return DP(model, device_ids=[idx for idx in range(len(gpu_list))])
 
 class DDPInitHelper(InitHelper):
     def __init__(self, config: Dict, rank: int, world_size: int) -> None:
@@ -105,7 +118,7 @@ class DDPInitHelper(InitHelper):
         dist.init_process_group("gloo", rank=self.rank, world_size=self.world_size)
         torch.cuda.set_device(self.rank)
 
-    def init_train_dsen2cr_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
+    def init_train_val_dsen2cr_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
         scene_black_list = self.config['scene_black_list']
         scene_white_list = self.config['scene_white_list']
         dataset = Dsen2crDataset(self.config['train_dir'],
@@ -120,6 +133,24 @@ class DDPInitHelper(InitHelper):
         train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=8, sampler=train_sampler)
         val_loader = DataLoader(val_set, batch_size=self.config['batch_size'], num_workers=8, sampler=val_sampler)
         return train_loader, val_loader
+
+    def init_train_test_dsen2cr_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
+        scene_black_list = self.config['scene_black_list']
+        scene_white_list = self.config['scene_white_list']
+        train_set = Dsen2crDataset(self.config['train_dir'],
+                                    Seasons(self.config['season']),
+                                    scene_white_list=scene_white_list,
+                                    scene_black_list=scene_black_list)
+        test_set = Dsen2crDataset(self.config['test_dir'],
+                                    Seasons(self.config['season']),
+                                    scene_white_list=scene_white_list,
+                                    scene_black_list=scene_black_list)
+        
+        train_sampler = DistributedSampler(train_set)
+        test_sampler = DistributedSampler(test_set)
+        train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=8, sampler=train_sampler)
+        test_loader = DataLoader(test_set, batch_size=self.config['batch_size'], num_workers=8, sampler=test_sampler)
+        return train_loader, test_loader
 
     def init_model(self) -> nn.Module:
         model = super().init_model()

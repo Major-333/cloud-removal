@@ -65,18 +65,20 @@ def get_warmup_scheduler(optimizer: optimizer, config: Dict) -> object:
     scheduler.step()
     return scheduler
 
-
-def _get_media_path(epoch: int, group: str, job_type: str, suffix: str = None) -> str:
+def _get_media_path(name: str, suffix: str = None) -> str:
     media_dir = wandb.config['media_dir']
-    return os.path.join(media_dir, f'{group}_{job_type}_{epoch}epochs_{suffix}.png')
+    if suffix:
+        filename = f'{name}_{suffix}.png'
+    else:
+        filename = f'{name}.png'
+    return os.path.join(media_dir, filename)
 
 
-def _get_media_title(epoch: int, scene_id: str, patch_id: str, suffix: str = None) -> str:
-    return f'scene_id:{scene_id}_patch_id:{patch_id}_{epoch}epochs_{suffix}'
+def _get_media_title(name: str, scene_id: str, patch_id: str) -> str:
+    return f'scene_id:{scene_id}_patch_id:{patch_id}_{name}'
 
 
 def save_all_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, ground_truth, rank: int, group: str) -> Dict:
-    logging.info('will save the media')
     rank = f'rank:{rank}'
     epoch = str(epoch)
     media_logs = {}
@@ -101,13 +103,10 @@ def save_all_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, 
         logging.error(f'{log_prefix} failed to save the media: {str(e)}')
         return {}
 
-def save_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, ground_truth, rank: int, group: str, patch_info: Dict) -> Dict:
-    logging.info('will save the media')
-    rank = f'rank:{rank}'
-    epoch = str(epoch)
+def save_media(name: str, output: tensor, cloudy: tensor, ground_truth, patch_info: Dict) -> Dict:
     media_logs = {}
-    media_path = _get_media_path(epoch, group, rank, suffix=iter_index)
-    media_title = _get_media_title(epoch, patch_info['scene_id'][0], patch_info['patch_id'][0], suffix=iter_index)
+    media_path = _get_media_path(name)
+    media_title = _get_media_title(name, patch_info['scene_id'][0], patch_info['patch_id'][0])
     try:
         ground_truth = ground_truth.cpu().detach().numpy()
         output = output.cpu().detach().numpy()
@@ -121,13 +120,15 @@ def save_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, grou
         return {}
 
 
-def save_checkpoints(model :nn.Module, epoch: int, rank: int, start_time: str, filename_prefix: Optional[str] = None):
-    logging.info(f'will save the model')
-    name = wandb.config['name']
+def save_checkpoints(model :nn.Module, epoch: int, start_time: str, filename_prefix: Optional[str] = None, suffix: Optional[str] = None):
+    model_name = wandb.config['model']
     checkpoints_dir = wandb.config['checkpoints_dir']
-    subdir_name = f'{name}_{start_time}'
-    current_time = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
-    filename = f'{filename_prefix}_epoch{str(epoch)}_{current_time}_{rank}'
+    subdir_name = f'{model_name}_{start_time}'
+    filename = f'epoch{str(epoch)}'
+    if filename_prefix:
+        filename = f'{filename_prefix}_{filename}'
+    if suffix:
+        filename = f'{filename}_{suffix}'
     subdir_path = os.path.join(checkpoints_dir, subdir_name)
     if not os.path.isdir(subdir_path):
         os.makedirs(subdir_path)

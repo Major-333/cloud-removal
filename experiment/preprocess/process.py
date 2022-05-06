@@ -131,12 +131,20 @@ class Preprocess(object):
                 logging.info(f'working on {payloads_index + 1} payload, progress:{payloads_index + 1}/{len(params)}')
                 scene_id = param.scene_id
                 patch_ids = param.patch_ids
+                if scene_id != 146:
+                    continue
                 for patch_id in patch_ids:
                     s1, s2, s2cloudy = self._get_triplets_by_patch(scene_id, patch_id)
                     if self.is_crop:
                         s1, s2, s2cloudy = self._crop_triplets_by_patch((s1, s2, s2cloudy))
                     s1, s2, s2cloudy = self._clip_triplets_by_patch((s1, s2, s2cloudy))
                     s1, s2, s2cloudy = self._normlize_triplets_by_patch((s1, s2, s2cloudy))
+                    if np.min(s1) < 0 or np.max(s1) > 255:
+                        logging.warning(f'scene_id:{scene_id}, patch_id:{patch_id}')
+                    if np.min(s2) < 0 or np.max(s2) > 255:
+                        logging.warning(f'scene_id:{scene_id}, patch_id:{patch_id}')
+                    if np.min(s2cloudy) < 0 or np.max(s2cloudy) > 255:
+                        logging.warning(f'scene_id:{scene_id}, patch_id:{patch_id}')                     
                     if self.convert_to_uint8:
                         s1, s2, s2cloudy = s1.astype('uint8'), s2.astype('uint8'), s2cloudy.astype('uint8')
                     self._save_triplets_by_patch((s1, s2, s2cloudy), scene_id, patch_id)

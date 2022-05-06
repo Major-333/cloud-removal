@@ -50,8 +50,8 @@ class Evaluater(object):
         num_val_batches = len(dataloader)
         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
         for index, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. Validation round')):
-            cloudy, ground_truth, _ = data_batch
-            cloudy, ground_truth = cloudy.cuda().float(), ground_truth.cuda().float()
+            cloudy, ground_truth, patch_info = data_batch
+            cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():
                 if isinstance(model, MPRNet):
                     output = model(cloudy)[2]
@@ -59,7 +59,6 @@ class Evaluater(object):
                     output = model(cloudy)
                 output[output < 0] = 0
                 output[output > 255] = 255
-                output, ground_truth = output.long().float(), ground_truth.long().float()
                 total_rmse += get_rmse(output, ground_truth).item()
                 total_psnr += get_psnr(output, ground_truth).item()
                 total_ssim += ssim(output, ground_truth, data_range=255.).item()

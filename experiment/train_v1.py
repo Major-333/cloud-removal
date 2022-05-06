@@ -72,8 +72,8 @@ class DPTrainer(object):
     def _update_summary(self, metric: Dict, epoch: int):
         is_update = False
         if metric[f'val_psnr'] > self.best_val_psnr:
-            logging.info(f'best val psnr update:{self.best_val_psnr}, on epoch:{epoch}')
             self.best_val_psnr = metric[f'val_psnr']
+            logging.info(f'best val psnr update:{self.best_val_psnr}, on epoch:{epoch}')
             wandb.run.summary['best_val_psnr'] = self.best_val_psnr
             wandb.run.summary['best_val_psnr_epoch'] = epoch
             is_update = True
@@ -106,7 +106,7 @@ class DPTrainer(object):
                         media_logs = self._get_media_log(epoch, output, cloudy, ground_truth, patch_info, key_suffix=f'{index}')
                         logs = logs | media_logs
                 logs = logs | {'epoch_loss': epoch_loss.item()}
-                if index % wandb.config['validate_freq'] == 0:
+                if epoch % wandb.config['validate_freq'] == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
                     logs = logs | {'learning rate': self.optimizer.param_groups[0]['lr']}
                     logs = logs | metric

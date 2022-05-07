@@ -7,8 +7,8 @@ media/
 *.yaml
 *.png
 *.out
-*test_*
 experiment/data*
 *build/
 *dist/
 *.*info
+*debug*

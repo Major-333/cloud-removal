@@ -9,3 +9,6 @@ media/
 *.out
 *test_*
 experiment/data*
+*build/
+*dist/
+*.*info

@@ -76,7 +76,12 @@ file struture like:
 export CUDA_VISIBLE_DEVICES = '0,1,2'
 ```
 
-3. run
+3. install warmup scheduler
+```bash
+cd pytorch-gradual-warmup-lr; python setup.py install; cd ..
+```
+
+4. run
 ```bash
 python train.py
 ```

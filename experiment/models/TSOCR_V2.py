@@ -27,7 +27,7 @@ class CrossAttention(nn.Module):
         self.sar_qkv = nn.Conv2d(dim, dim*3, kernel_size=1, bias=bias)
         self.sar_qkv_dwconv = nn.Conv2d(dim*3, dim*3, kernel_size=3, stride=1, padding=1, groups=dim*3, bias=bias)
 
-        self.ms_project_out = nn.Conv2d(2*dim, dim, kernel_size=1, bias=bias)
+        self.ms_project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
         self.sar_project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
         
 
@@ -75,7 +75,7 @@ class CrossAttention(nn.Module):
         cross_attn_out = rearrange(cross_attn_out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=h, w=w)
 
         sar_out = self.sar_project_out(sar_self_attn_out)
-        ms_out = self.ms_project_out(torch.cat((ms_self_attn_out, cross_attn_out), 1))
+        ms_out = self.ms_project_out(cross_attn_out + ms_self_attn_out)
         ms_out = ms + ms_out # short cut
         sar_out = sar + sar_out # short cut
 
@@ -106,7 +106,7 @@ class TransformerFusionBlock(nn.Module):
         return (sar, ms)
 
 
-class TSOCR(nn.Module):
+class TSOCR_V2(nn.Module):
     def __init__(self, 
         dim = 48,
         num_blocks = [4,6,6,8], 
@@ -118,7 +118,7 @@ class TSOCR(nn.Module):
         dual_pixel_task = False        ## True for dual-pixel defocus deblurring only. Also set inp_channels=6
     ):
 
-        super(TSOCR, self).__init__()
+        super(TSOCR_V2, self).__init__()
 
         self.ms_patch_embed = OverlapPatchEmbed(13, dim)
         self.sar_patch_embed = OverlapPatchEmbed(2, dim)
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     fake_input = torch.rand(8, 13, 128, 128) # N C H W
     sar = torch.rand(8, 2, 128, 128) # N C H W
     print(fake_input.shape)
-    net = TSOCR()
+    net = TSOCR_V2()
 
     output = net(torch.cat((sar, fake_input), 1))
     print(output.shape)

@@ -165,7 +165,7 @@ class AttentionV2(nn.Module):
         self.sar_qkv_dwconv = nn.Conv2d(dim*2, dim*2, kernel_size=3, stride=1, padding=1, groups=dim*2, bias=bias)
 
         self.project_out = nn.Conv2d(2*dim, dim, kernel_size=1, bias=bias)
-        
+
 
     def forward(self, sar, ms):
         b,c,h,w = ms.shape
@@ -195,6 +195,7 @@ class AttentionV2(nn.Module):
         sar2ms_attn = (sar_q @ ms_k.transpose(-2, -1)) * self.sar_temperature
         sar2ms_attn = sar2ms_attn.softmax(dim=-1)
 
+        print(f'ms_v shape:{ms_v.shape}, ms2ms_attn shape:{ms2ms_attn.shape}')
         ms_out = (ms2ms_attn @ ms_v)
         sar_out = (sar2ms_attn @ sar_v)
         

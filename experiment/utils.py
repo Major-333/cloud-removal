@@ -17,6 +17,7 @@ from models.dsen2cr import DSen2_CR
 from models.test_model import TestModel
 from models.mprnet import MPRNet
 from models.restormer import Restormer
+from models.TSOCR import TSOCR
 from warmup_scheduler import GradualWarmupScheduler
 from dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
 from matplotlib import pyplot as plt
@@ -159,5 +160,10 @@ def init_test_model() -> nn.Module:
 
 def init_restormer() -> nn.Module:
     model = Restormer()
+    model = model.cuda()
+    return model
+
+def init_TSOCR_model() -> nn.Module:
+    model = TSOCR()
     model = model.cuda()
     return model

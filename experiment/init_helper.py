@@ -19,7 +19,7 @@ from models.test_model import TestModel
 from models.mprnet import MPRNet
 from warmup_scheduler import GradualWarmupScheduler
 from dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
-from utils import init_weights, init_dsen2cr, init_mprnet, init_restormer, init_test_model
+from utils import init_weights, init_dsen2cr, init_mprnet, init_restormer, init_test_model, init_TSOCR_model
 from loss.charbonnier_loss import CharbonnierLoss
 
 
@@ -32,7 +32,8 @@ MODEL_MAPPER = {
     'MPRNet': init_mprnet,
     'Restormer': init_restormer,
     'DSen2CR': init_dsen2cr,
-    'Test': init_test_model
+    'Test': init_test_model,
+    'TSOCR': init_TSOCR_model,
 }
 
 def init_wandb(rank: int, group: str) -> Dict:
@@ -62,8 +63,8 @@ class InitHelper(object):
         n_val = int(len(dataset) * self.config['val_percent'])
         n_train = len(dataset) - n_val
         train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(1999))
-        train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=8)
-        val_loader = DataLoader(val_set, batch_size=self.config['batch_size'], num_workers=8)
+        train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=16, pin_memory=True)
+        val_loader = DataLoader(val_set, batch_size=self.config['batch_size'], num_workers=16, pin_memory=True)
         return train_loader, val_loader
 
     def init_dsen2cr_dataloader(self, data_dir: str) -> DataLoader:

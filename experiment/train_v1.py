@@ -4,6 +4,7 @@ from tqdm import tqdm
 import os
 import sys
 import torch
+import argparse
 import traceback
 from datetime import datetime, timedelta
 import wandb
@@ -13,22 +14,32 @@ from init_helper import DPInitHelper, init_wandb_in_dp
 from evaluate import Evaluater
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
+CHECKPOINT_NAME_PREFIX = 'epoch'
 
 class DPTrainer(object):
-    def __init__(self, config: Dict) -> None:
+    def __init__(self, config: Dict, checkpoint_path: Optional[str] = None) -> None:
         self.config = config
         self.init_helper = DPInitHelper(self.config)
+        self.checkpoint_path = checkpoint_path
+
+    @property
+    def is_resume(self) -> bool:
+        return self.checkpoint_path is not None
 
     def _setup(self) -> None:
         self.train_loader, self.val_loader = self.init_helper.init_train_val_dsen2cr_dataloaders()
         # HACK: check Adam with lr_scheduler
         self.loss_fn = self.init_helper.get_loss_fn()
-        self.model = self.init_helper.init_model()
+        if self.is_resume:
+            self.model = self.init_helper.resume_model(self.checkpoint_path)
+            self.resume_epoch_num = int(self.checkpoint_path.split(CHECKPOINT_NAME_PREFIX)[1])
+        else:
+            self.model = self.init_helper.init_model()
         self.optimizer = self.init_helper.init_optimizer(self.model)
         self.scheduler = self.init_helper.get_warmup_scheduler(self.optimizer)
         self.loss_fn = self.init_helper.get_loss_fn()
         self.best_val_psnr = 0
-        self.best_val_ssim = 0
+        self.best_val_ssim = 0    
 
     def _get_loss(self, output, ground_truth):
         if self.config['model'] != 'MPRNet':
@@ -78,8 +89,8 @@ class DPTrainer(object):
             wandb.run.summary['best_val_psnr_epoch'] = epoch
             is_update = True
         if metric[f'val_ssim'] > self.best_val_ssim:
-            logging.info(f'best val ssim update:{self.best_val_ssim}, on epoch:{epoch}')
             self.best_val_ssim = metric[f'val_ssim']
+            logging.info(f'best val ssim update:{self.best_val_ssim}, on epoch:{epoch}')
             wandb.run.summary['best_val_ssim'] = self.best_val_ssim
             wandb.run.summary['best_val_ssim_epoch'] = epoch
             is_update = True
@@ -93,21 +104,25 @@ class DPTrainer(object):
                 self.model.train()
                 epoch_loss = 0
                 logs = {}
-                for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
-                    self.optimizer.zero_grad()
-                    cloudy, ground_truth, patch_info = data_batch
-                    cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
-                    output = self.model(cloudy)
-                    loss = self._get_loss(output, ground_truth)
-                    loss.backward()
-                    self.optimizer.step()
-                    epoch_loss += loss                
-                    if index % wandb.config['visual_freq'] == 0:
-                        media_logs = self._get_media_log(epoch, output, cloudy, ground_truth, patch_info, key_suffix=f'{index}')
-                        logs = logs | media_logs
-                logs = logs | {'epoch_loss': epoch_loss.item()}
+                # If the training is in the recovery phase, will skip the train phase
+                if not self.is_resume or epoch > self.resume_epoch_num:
+                    for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
+                        self.optimizer.zero_grad()
+                        cloudy, ground_truth, patch_info = data_batch
+                        cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
+                        output = self.model(cloudy)
+                        loss = self._get_loss(output, ground_truth)
+                        loss.backward()
+                        self.optimizer.step()
+                        epoch_loss += loss                
+                        if index % wandb.config['visual_freq'] == 0:
+                            media_logs = self._get_media_log(epoch, output, cloudy, ground_truth, patch_info, key_suffix=f'{index}')
+                            logs = logs | media_logs
+                    logs = logs | {'epoch_loss': epoch_loss.item()}
                 if epoch % wandb.config['validate_freq'] == 0:
-                    metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
+                    # If the training is in the recovery phase, run the evaluation function only once. and reuse this result
+                    if not self.is_resume or epoch > self.resume_epoch_num or epoch == 1:
+                        metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
                     logs = logs | {'learning rate': self.optimizer.param_groups[0]['lr']}
                     logs = logs | metric
                     self._update_summary(metric, epoch)
@@ -117,10 +132,14 @@ class DPTrainer(object):
             logging.error(f'Falied in training:{str(e)}, traceback:{traceback.format_exc()}')
             wandb.finish()
 
-def run(group: str):
+def run(group: str, checkpoint_relpath: Optional[str] = None):
     try:
         config = init_wandb_in_dp(group)
-        trainer = DPTrainer(config)
+        checkpoint_path = None
+        if checkpoint_relpath:
+            checkpoint_path = os.path.join(config['checkpoints_dir'], checkpoint_relpath)
+            logging.info(f'===loading model state from:{checkpoint_path}===')
+        trainer = DPTrainer(config, checkpoint_path)
         trainer.train()
     except Exception as e:
         logging.error(f'Falied in training:{str(e)}, traceback:{traceback.format_exc()}')
@@ -136,6 +155,11 @@ def config_log():
         handlers=handlers
     )
 
+def get_args():
+    parser = argparse.ArgumentParser(description='Train the Cloud Remove network')
+    parser.add_argument('--resume', '-f', type=str, required=False, help='Load model from a .pth file')
+    return parser.parse_args()
+
 if __name__ == '__main__':
     config_log()
     if not os.getenv('CUDA_VISIBLE_DEVICES'):
@@ -143,4 +167,9 @@ if __name__ == '__main__':
     parallel_num = len(os.getenv('CUDA_VISIBLE_DEVICES').split(','))
     logging.info(f'parallel_num:{parallel_num}')
     group = f'experiment-{wandb.util.generate_id()}'
-    run(group)
+    args = get_args()
+    if args.resume:
+        checkpoint_relpath = args.resume
+        run(group, checkpoint_relpath)
+    else:
+        run(group)

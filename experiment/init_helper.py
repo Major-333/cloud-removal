@@ -65,8 +65,8 @@ class InitHelper(object):
         n_val = int(len(dataset) * self.config['val_percent'])
         n_train = len(dataset) - n_val
         train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(1999))
-        train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=8, pin_memory=True)
-        val_loader = DataLoader(val_set, batch_size=self.config['batch_size'], num_workers=8, pin_memory=True)
+        train_loader = DataLoader(train_set, batch_size=self.config['batch_size'], num_workers=4)
+        val_loader = DataLoader(val_set, batch_size=self.config['batch_size'], num_workers=4)
         return train_loader, val_loader
 
     def init_dsen2cr_dataloader(self, data_dir: str) -> DataLoader:
@@ -101,9 +101,27 @@ class InitHelper(object):
         model = model.cuda()
         return model
 
+    def resume_model(self, model: nn.Module, checkpoint_path:str) -> nn.Module:
+        raw_state = torch.load(checkpoint_path)
+        # HACK:
+        state = {}
+        for key in raw_state:
+            new_key = key[7:] # ignore prefix: module.*
+            state[new_key] = raw_state[key]
+        logging.info(f'new state:\n{state.keys()}')
+        model.load_state_dict(state)
+        return model
+
 class DPInitHelper(InitHelper):
     def init_model(self) -> nn.Module:
         model = super().init_model()
+        gpu_list = os.getenv('CUDA_VISIBLE_DEVICES').split(',')
+        logging.info(f'using gpu:{gpu_list}')
+        return DP(model, device_ids=[idx for idx in range(len(gpu_list))])
+
+    def resume_model(self, checkpoint_path:str) -> nn.Module:
+        model = super().init_model()
+        model = super().resume_model(model, checkpoint_path)
         gpu_list = os.getenv('CUDA_VISIBLE_DEVICES').split(',')
         logging.info(f'using gpu:{gpu_list}')
         return DP(model, device_ids=[idx for idx in range(len(gpu_list))])

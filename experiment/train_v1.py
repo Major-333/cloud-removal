@@ -9,12 +9,11 @@ import traceback
 from datetime import datetime, timedelta
 import wandb
 from metrics.pixel_metric import get_psnr, get_rmse
-from utils import save_media, save_checkpoints
+from utils import save_media, save_checkpoints, CHECKPOINT_NAME_PREFIX
 from init_helper import DPInitHelper, init_wandb_in_dp
 from evaluate import Evaluater
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
-CHECKPOINT_NAME_PREFIX = 'epoch'
 
 class DPTrainer(object):
     def __init__(self, config: Dict, checkpoint_path: Optional[str] = None) -> None:

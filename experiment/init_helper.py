@@ -33,6 +33,8 @@ MODEL_MAPPER = {
     'Restormer': init_restormer,
     'DSen2CR': init_dsen2cr,
     'Test': init_test_model,
+    'TSOCR_V0': init_restormer,
+    'TSOCR_V0.5': init_test_model,
     'TSOCR_V1': init_TSOCR_V1_model,
     'TSOCR_V2': init_TSOCR_V2_model,
     'TSOCR_V3': init_TSOCR_V3_model,

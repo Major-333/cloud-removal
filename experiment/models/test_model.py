@@ -195,7 +195,7 @@ class AttentionV2(nn.Module):
         sar2ms_attn = (sar_q @ ms_k.transpose(-2, -1)) * self.sar_temperature
         sar2ms_attn = sar2ms_attn.softmax(dim=-1)
 
-        print(f'ms_v shape:{ms_v.shape}, ms2ms_attn shape:{ms2ms_attn.shape}')
+        # print(f'ms_v shape:{ms_v.shape}, ms2ms_attn shape:{ms2ms_attn.shape}')
         ms_out = (ms2ms_attn @ ms_v)
         sar_out = (sar2ms_attn @ sar_v)
         

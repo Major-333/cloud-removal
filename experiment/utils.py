@@ -27,6 +27,7 @@ from dataset.basic_dataloader import SEN12MSCPatchRPath
 
 
 LOSS_MAPPER = {'MSE': torch.nn.MSELoss()}
+CHECKPOINT_NAME_PREFIX = 'epoch'
 
 def setup_ddp_envs():
     os.environ['MASTER_ADDR'] = 'localhost'

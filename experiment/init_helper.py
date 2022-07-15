@@ -19,7 +19,7 @@ from models.test_model import TestModel
 from models.mprnet import MPRNet
 from warmup_scheduler import GradualWarmupScheduler
 from dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
-from utils import init_weights, init_dsen2cr, init_mprnet, init_restormer, init_test_model, init_TSOCR_V1_model, init_TSOCR_V2_model, init_TSOCR_V3_model
+from utils import init_weights, init_dsen2cr, init_mprnet, init_restormer, init_test_model, init_TSOCR_V1_model, init_TSOCR_V2_model, init_TSOCR_V3_model, init_TSOCR_V1m_model, init_TSOCR_V2m_model
 from loss.charbonnier_loss import CharbonnierLoss
 
 
@@ -36,7 +36,9 @@ MODEL_MAPPER = {
     'TSOCR_V0': init_restormer,
     'TSOCR_V0.5': init_test_model,
     'TSOCR_V1': init_TSOCR_V1_model,
+    'TSOCR_V1m': init_TSOCR_V1m_model,
     'TSOCR_V2': init_TSOCR_V2_model,
+    'TSOCR_V2m': init_TSOCR_V1m_model,
     'TSOCR_V3': init_TSOCR_V3_model,
 }
 
@@ -110,7 +112,7 @@ class InitHelper(object):
         for key in raw_state:
             new_key = key[7:] # ignore prefix: module.*
             state[new_key] = raw_state[key]
-        logging.info(f'new state:\n{state.keys()}')
+        #logging.info(f'new state:\n{state.keys()}')
         model.load_state_dict(state)
         return model
 

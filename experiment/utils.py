@@ -20,6 +20,8 @@ from models.restormer import Restormer
 from models.TSOCR_V1 import TSOCR_V1
 from models.TSOCR_V2 import TSOCR_V2
 from models.TSOCR_V3 import TSOCR_V3
+from models.TSOCR_V1m import TSOCR_V1m
+from models.TSOCR_V2m import TSOCR_V2m
 from warmup_scheduler import GradualWarmupScheduler
 from dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
 from matplotlib import pyplot as plt
@@ -48,7 +50,7 @@ def load_ddp_checkpoint(model: nn.Module, checkpoint_path: str, device: str) -> 
     for key in ddp_state:
         new_key = key[7:] # ignore prefix: module.*
         state[new_key] = ddp_state[key]
-    print(f'state:\n{state.keys()}')
+    #print(f'state:\n{state.keys()}')
     model.load_state_dict(state)
     
     return model
@@ -142,10 +144,10 @@ def save_checkpoints(model :nn.Module, epoch: int, start_time: str, filename_pre
 
 def init_dsen2cr() -> nn.Module:
     config = wandb.config
-    model = DSen2_CR(in_channels=config['in_channels'],
-                        out_channels=config['out_channels'],
-                        num_layers=config['num_layers'],
-                        feature_dim=config['feature_dim'])
+    model = DSen2_CR(in_channels=15,
+                        out_channels=13,
+                        num_layers=6,
+                        feature_dim=256)
     model.apply(init_weights)
     model = model.cuda()
     return model
@@ -173,6 +175,16 @@ def init_TSOCR_V1_model() -> nn.Module:
 
 def init_TSOCR_V2_model() -> nn.Module:
     model = TSOCR_V2()
+    model = model.cuda()
+    return model
+
+def init_TSOCR_V1m_model() -> nn.Module:
+    model = TSOCR_V1m()
+    model = model.cuda()
+    return model
+
+def init_TSOCR_V2m_model() -> nn.Module:
+    model = TSOCR_V2m()
     model = model.cuda()
     return model
 

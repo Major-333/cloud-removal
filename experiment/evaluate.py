@@ -35,7 +35,8 @@ class Evaluater(object):
         model.eval()
         num_val_batches = len(dataloader)
         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
-        for index, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. Validation round')):
+        print(f'batch size:{dataloader.batch_size}, loader length is: {len(dataloader)}')
+        for index, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {prefix} round')):
             cloudy, ground_truth, patch_info = data_batch
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():

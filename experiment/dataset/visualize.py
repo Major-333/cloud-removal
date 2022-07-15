@@ -156,6 +156,29 @@ def visualize_output_with_groundtruth(ground_truth: array, output: array, filepa
     plt.savefig(filepath)
     return fig
 
+def save_patch(patch: array, file_path: str):
+    if len(patch.shape) != 3:
+        raise ValueError(f'patch shape should be C H W, but got:{patch.shape}')
+    c, h, w = patch.shape
+
+    patch = (patch * 255.0 / (np.max(patch) + 1e-7))
+    patch = patch.astype('int')
+    patch = patch / 255.0
+    if c == 1:
+        patch = np.transpose(patch, (2, 1, 0))
+        plt.imsave(file_path, patch)
+    elif c == 2:
+        diff = np.expand_dims(patch[1,:,:] - patch[0,:,:], axis=0) * 0
+        img = np.concatenate((patch, diff), axis=0)
+        img = np.transpose(img, (2, 1, 0))
+        img = (img - np.min(img)) / (np.max(img) - np.min(img))
+        plt.imsave(file_path, img)
+    elif c == 3:
+        patch = np.transpose(patch, (2, 1, 0))
+        plt.imsave(file_path, patch)
+    else:
+        raise ValueError(f'patch shape should be C H W, but got:{patch.shape}')
+
 
 if __name__ == '__main__':
     base_dir = '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data/SEN12MS_CR'

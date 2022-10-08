@@ -4,8 +4,8 @@ from typing import List, Tuple
 import pandas as pd
 import numpy as np
 from numpy import array
-from dataset.basic_dataloader import SEN12MSCRDataset, Seasons, S1Bands, S2Bands
-from dataset.processed_dataloader import get_s1s2s2cloudy_processed_triplet
+from experiment.sen12ms_cr_dataset.dataset import SEN12MSCRDataset, Season, S1Bands, S2Bands
+from sen12ms_cr_dataset.processed_dataset import get_s1s2s2cloudy_processed_triplet
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import axis, figure
@@ -156,6 +156,7 @@ def visualize_output_with_groundtruth(ground_truth: array, output: array, filepa
     plt.savefig(filepath)
     return fig
 
+
 def save_patch(patch: array, file_path: str):
     if len(patch.shape) != 3:
         raise ValueError(f'patch shape should be C H W, but got:{patch.shape}')
@@ -168,7 +169,7 @@ def save_patch(patch: array, file_path: str):
         patch = np.transpose(patch, (2, 1, 0))
         plt.imsave(file_path, patch)
     elif c == 2:
-        diff = np.expand_dims(patch[1,:,:] - patch[0,:,:], axis=0) * 0
+        diff = np.expand_dims(patch[1, :, :] - patch[0, :, :], axis=0) * 0
         img = np.concatenate((patch, diff), axis=0)
         img = np.transpose(img, (2, 1, 0))
         img = (img - np.min(img)) / (np.max(img) - np.min(img))
@@ -197,10 +198,10 @@ if __name__ == '__main__':
     #     s2[0, :, :, :], s2cloudy[0, :, :, :], './a.png', title='test-visualization')
     # visualize_output_with_groundtruth_only_rgb(
     #     s2[0, :, :, :], s2cloudy[0, :, :, :], './a1.png', title='test-visualization')
-    scene_ids_dict = dataloader.get_season_ids(Seasons.SUMMER)
+    scene_ids_dict = dataloader.get_season_ids(Season.SUMMER)
     patch_id = scene_ids_dict[scene_id][115]
     print(patch_id)
-    season = Seasons.SUMMER
+    season = Season.SUMMER
     s1, s2, s2cloudy = get_s1s2s2cloudy_processed_triplet(processed_dir, season, scene_id, patch_id)
     print(np.min(s1), np.max(s1))
     print(np.min(s2), np.max(s2))

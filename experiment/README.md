@@ -73,7 +73,7 @@ file struture like:
 
 2. setup gpu config
 ```bash
-export CUDA_VISIBLE_DEVICES = '0,1,2'
+export CUDA_VISIBLE_DEVICES='0,1,2'
 ```
 
 3. install warmup scheduler

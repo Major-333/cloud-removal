@@ -2,9 +2,8 @@ import os
 import torch
 import numpy as np
 import logging
-from dataset.basic_dataloader import Seasons, S2Bands
-from dataset.processed_dataloader import get_s1s2s2cloudy_processed_triplet
-from dataset.visualize import save_patch
+from experiment.sen12ms_cr_dataset.dataset import Season, S2Bands
+from sen12ms_cr_dataset.visualize import save_patch
 from models.mprnet import MPRNet
 from init_helper import InitHelper
 from typing import Optional, Dict, Tuple
@@ -13,7 +12,9 @@ import argparse
 
 CONFIG_FILEPATH = './config-defaults.yaml'
 
+
 class Visualizer(object):
+
     def __init__(self, config: Dict, device: str, checkpoint_path: str) -> None:
         self._config = config
         if self._config['model'] != os.path.basename(os.path.dirname(checkpoint_path)):
@@ -24,10 +25,12 @@ class Visualizer(object):
         logging.info(f'will evaluate the checkpoint:{checkpoint_path}')
         self._model = load_ddp_checkpoint(model, checkpoint_path, self._device)
 
-
     def visualize_on_test_by_patch(self, patch_id: str, scene_id: str):
         model = self._model
-        sar_patch, ground_truth, s2cloudy_patch = get_s1s2s2cloudy_processed_triplet(self._config['test_dir'], Seasons.SUMMER, scene_id=scene_id, patch_id=patch_id)
+        sar_patch, ground_truth, s2cloudy_patch = get_s1s2s2cloudy_processed_triplet(self._config['test_dir'],
+                                                                                     Season.SUMMER,
+                                                                                     scene_id=scene_id,
+                                                                                     patch_id=patch_id)
         base_dir = os.path.join(self._config['visual_perception_dir'], self._config['model'])
         sar_filepath = os.path.join(base_dir, f'SAR-{scene_id}-{patch_id}.png')
         input_filepath = os.path.join(base_dir, f'input-{scene_id}-{patch_id}.png')
@@ -53,6 +56,7 @@ class Visualizer(object):
         save_patch(ground_truth_rgb_patch, ground_truth_filepath)
         save_patch(output_rgb_patch, output_filepath)
 
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--load', '-f', type=str, required=True, help='Load model from a .pth file')
@@ -61,11 +65,12 @@ def get_args():
 
     return parser.parse_args()
 
+
 if __name__ == '__main__':
     logging.basicConfig(filename='logger.log',
-                level=logging.INFO,
-                datefmt='%Y-%m-%d %H:%M:%S',
-                format='%(asctime)s %(levelname)-8s %(message)s')
+                        level=logging.INFO,
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        format='%(asctime)s %(levelname)-8s %(message)s')
     args = get_args()
     if not os.getenv('CUDA_VISIBLE_DEVICES'):
         raise ValueError(f'set the env: `CUDA_VISIBLE_DEVICES` first')

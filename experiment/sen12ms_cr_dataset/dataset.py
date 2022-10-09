@@ -175,12 +175,12 @@ class SEN12MSCRDataset(Dataset):
         self.base_dir = base_dir
         if not os.path.exists(self.base_dir):
             raise Exception(f'SEN12MSCRDataset faled to init. base_dir:{base_dir} does not exist')
-        self.triplets = self.get_all_triplets()
         if file_extension not in SEN12MSCRTriplet.SUPPORTED_EXTENSIONS:
             raise ValueError(
                 f'file_extension:{file_extension} is not supported. Only support:{SEN12MSCRTriplet.SUPPORTED_EXTENSIONS}'
             )
         self.file_extension = file_extension
+        self.triplets = self.get_all_triplets()
 
     def get_scene_ids(self, season: Season) -> List[str]:
         """ Returns a list of scene ids for a specific season.
@@ -335,6 +335,7 @@ class SEN12MSCRDataset(Dataset):
     def __getitem__(self, index):
         triplet = self.triplets[index]
         s1, s2, s2_cloudy = triplet.data
+        s1, s2, s2_cloudy = np.float32(s1), np.float32(s2), np.float32(s2_cloudy)
         return np.concatenate((s1, s2_cloudy), axis=0), s2, {'scene_id': triplet.scene_id, 'patch_id': triplet.patch_id}
 
 
@@ -384,7 +385,6 @@ if __name__ == "__main__":
         i += 1
 
     print("Time Taken {}s".format(time.time() - start))
-    print("\n")
 
     # start = time.time()
     # print('Load all bands of all patches in a specified scene (scene 106)')
@@ -398,7 +398,17 @@ if __name__ == "__main__":
     # print(f"Scene: 106, S1: {s1.shape}, S2: {s2.shape}, cloudy S2: {s2cloudy.shape}")
     # print("Time Taken {}s".format(time.time() - start))
 
+    # Print the number of triplets
     start = time.time()
-    patches = sen12mscr.get_all_triplets()
-    print(f'Patches Total Count is:{len(patches)}')
+    triplets = sen12mscr.get_all_triplets()
+    print(f'Triplets Total Count is:{len(triplets)}')
+    print("Time Taken {}s".format(time.time() - start))
+    # Print the number of scene(ROI)
+    start = time.time()
+    scene_cnt = 0
+    for season_value in Season.ALL.value:
+        season = Season(season_value)
+        ids = sen12mscr.get_scene_ids(season)
+        scene_cnt += len(ids)
+    print(f'Scenes Total Count is:{scene_cnt}')
     print("Time Taken {}s".format(time.time() - start))

@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 from numpy import array
 from experiment.sen12ms_cr_dataset.dataset import SEN12MSCRDataset, Season, S1Bands, S2Bands
-from sen12ms_cr_dataset.processed_dataset import get_s1s2s2cloudy_processed_triplet
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import axis, figure

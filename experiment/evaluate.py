@@ -5,7 +5,7 @@ from typing import Optional, Dict, Tuple
 from tqdm import tqdm
 import os
 import torch
-from torch import nn, tensor, optim, distributed as dist, multiprocessing as mp
+from torch import nn, Tensor, optim, distributed as dist, multiprocessing as mp
 from torch.utils.data import DataLoader, random_split
 from metrics.pixel_metric import get_psnr, get_rmse, get_mae
 from metrics.structure_metric import get_sam
@@ -16,9 +16,14 @@ from init_helper import InitHelper
 
 CONFIG_FILEPATH = './config-defaults.yaml'
 
+
 class Evaluater(object):
 
-    def __init__(self, config: Dict, device: str, overwrite: Optional[bool] = False, only_test: Optional[bool] = False) -> None:
+    def __init__(self,
+                 config: Dict,
+                 device: str,
+                 overwrite: Optional[bool] = False,
+                 only_test: Optional[bool] = False) -> None:
         self._config = config
         self._device = device
         self._overwrite = overwrite
@@ -79,9 +84,10 @@ class Evaluater(object):
     @staticmethod
     def sort_checkpoint_names(file_names: str):
         checkpoint_names = [name for name in file_names if not name.endswith('.json')]
-        checkpoint_names = sorted(checkpoint_names, key=lambda name: int(name.replace(CHECKPOINT_NAME_PREFIX, '')), reverse=True)
+        checkpoint_names = sorted(checkpoint_names,
+                                  key=lambda name: int(name.replace(CHECKPOINT_NAME_PREFIX, '')),
+                                  reverse=True)
         return checkpoint_names
-
 
     def evaluate_all_checkpoints(self, checkpoints_dir: str):
         file_names = os.listdir(checkpoints_dir)
@@ -105,9 +111,9 @@ def get_args():
 
 if __name__ == '__main__':
     logging.basicConfig(filename='logger.log',
-                    level=logging.INFO,
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    format='%(asctime)s %(levelname)-8s %(message)s')
+                        level=logging.INFO,
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        format='%(asctime)s %(levelname)-8s %(message)s')
     if not os.getenv('CUDA_VISIBLE_DEVICES'):
         raise ValueError(f'set the env: `CUDA_VISIBLE_DEVICES` first')
     if not os.path.exists('config-defaults.yaml'):

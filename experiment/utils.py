@@ -5,14 +5,10 @@ import yaml
 import wandb
 import torch
 from datetime import datetime, timedelta
-from torch import nn, tensor, optim, distributed as dist, multiprocessing as mp
+from torch import nn, Tensor, optim, distributed as dist, multiprocessing as mp
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.optim import optimizer, lr_scheduler
-from torch.utils.data import DataLoader, random_split
-from torch.utils.data.distributed import DistributedSampler
-from dataset.dsen2cr_dataset import SEN12MSCRProcessedDataset
-from dataset.basic_dataloader import Seasons
+from torch.optim import optimizer
 from models.dsen2cr import DSen2_CR
 from models.test_model import TestModel
 from models.mprnet import MPRNet
@@ -23,9 +19,8 @@ from models.TSOCR_V3 import TSOCR_V3
 from models.TSOCR_V1m import TSOCR_V1m
 from models.TSOCR_V2m import TSOCR_V2m
 from warmup_scheduler import GradualWarmupScheduler
-from dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
+from sen12ms_cr_dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
 from matplotlib import pyplot as plt
-from dataset.basic_dataloader import SEN12MSCPatchRPath
 
 LOSS_MAPPER = {'MSE': torch.nn.MSELoss()}
 CHECKPOINT_NAME_PREFIX = 'epoch'
@@ -93,7 +88,7 @@ def _get_media_title(name: str, scene_id: str, patch_id: str) -> str:
     return f'scene_id:{scene_id}_patch_id:{patch_id}_{name}'
 
 
-def save_all_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, ground_truth, rank: int,
+def save_all_media(epoch: int, iter_index: int, output: Tensor, cloudy: Tensor, ground_truth, rank: int,
                    group: str) -> Dict:
     rank = f'rank:{rank}'
     epoch = str(epoch)
@@ -118,7 +113,7 @@ def save_all_media(epoch: int, iter_index: int, output: tensor, cloudy: tensor, 
         return {}
 
 
-def save_media(name: str, output: tensor, cloudy: tensor, ground_truth, patch_info: Dict) -> Dict:
+def save_media(name: str, output: Tensor, cloudy: Tensor, ground_truth, patch_info: Dict) -> Dict:
     media_logs = {}
     media_path = _get_media_path(name)
     media_title = _get_media_title(name, patch_info['scene_id'][0], patch_info['patch_id'][0])
@@ -153,60 +148,3 @@ def save_checkpoints(model: nn.Module,
     file_path = os.path.join(subdir_path, filename)
     logging.info(f'will save the model to:{file_path}')
     torch.save(model.state_dict(), file_path)
-
-
-def init_dsen2cr() -> nn.Module:
-    config = wandb.config
-    model = DSen2_CR(in_channels=15, out_channels=13, num_layers=6, feature_dim=256)
-    model.apply(init_weights)
-    model = model.cuda()
-    return model
-
-
-def init_mprnet() -> nn.Module:
-    model = MPRNet()
-    model = model.cuda()
-    return model
-
-
-def init_test_model() -> nn.Module:
-    model = TestModel()
-    model.apply(init_weights)
-    model = model.cuda()
-    return model
-
-
-def init_restormer() -> nn.Module:
-    model = Restormer()
-    model = model.cuda()
-    return model
-
-
-def init_TSOCR_V1_model() -> nn.Module:
-    model = TSOCR_V1()
-    model = model.cuda()
-    return model
-
-
-def init_TSOCR_V2_model() -> nn.Module:
-    model = TSOCR_V2()
-    model = model.cuda()
-    return model
-
-
-def init_TSOCR_V1m_model() -> nn.Module:
-    model = TSOCR_V1m()
-    model = model.cuda()
-    return model
-
-
-def init_TSOCR_V2m_model() -> nn.Module:
-    model = TSOCR_V2m()
-    model = model.cuda()
-    return model
-
-
-def init_TSOCR_V3_model() -> nn.Module:
-    model = TSOCR_V3()
-    model = model.cuda()
-    return model

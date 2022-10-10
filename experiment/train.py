@@ -7,7 +7,9 @@ import traceback
 from tqdm import tqdm
 from typing import Optional, Dict, List
 import torch
-from torch import nn, optim
+from torch import nn, optim, index_copy, distributed as dist, multiprocessing as mp
+from torch.nn import functional as F
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from warmup_scheduler import GradualWarmupScheduler
 from datetime import datetime, timedelta
@@ -51,7 +53,7 @@ class Trainer(object):
         self.lr = config['lr']
         self.min_lr = config['min_lr']
         self.loss_name = config['loss_fn']
-        self.validate_freq = config['validate_freq']
+        self.validate_every = config['validate_every']
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
 
@@ -127,6 +129,9 @@ class Trainer(object):
     # logging.info(f'will save the model to:{file_path}')
     # torch.save(model.state_dict(), file_path)
 
+    def _run_epoch(self) -> Dict:
+        pass
+
     def train(self) -> None:
         for epoch in range(1, self.max_epoch + 1):
             self.model.train()
@@ -135,7 +140,7 @@ class Trainer(object):
             if not self.is_resume or epoch > self.resume_epoch_num:
                 for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
                     self.optimizer.zero_grad()
-                    cloudy, ground_truth, patch_info = data_batch
+                    cloudy, ground_truth = data_batch
                     cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
                     output = self.model(cloudy)
                     loss = self.loss_fn(output, ground_truth)
@@ -143,8 +148,9 @@ class Trainer(object):
                     self.optimizer.step()
                     epoch_loss += loss
                     # TODO: visualize
-                training_info = training_info | {'epoch_loss': epoch_loss.item()}
-                if epoch % self.validate_freq == 0:
+                training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
+                if epoch % self.validate_every == 0:
+
                     # TODO: Evaluate
                     # metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
                     # training_info = training_info | metric

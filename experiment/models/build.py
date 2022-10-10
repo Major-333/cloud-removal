@@ -4,6 +4,8 @@ from typing import List
 import torch
 from torch import nn
 from torch.nn.parallel import DataParallel as DP
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 from models.dsen2cr import DSen2_CR
 from models.mprnet import MPRNet
 from models.restormer import Restormer
@@ -16,9 +18,7 @@ from models.test_model import TestModel
 
 
 def _init_dsen2cr() -> nn.Module:
-    config = wandb.config
     model = DSen2_CR(in_channels=15, out_channels=13, num_layers=6, feature_dim=256)
-    model.apply(init_weights)
     model = model.cuda()
     return model
 
@@ -91,6 +91,10 @@ def build_model_with_dp(model_name: str, gpu_list: List[int]) -> nn.Module:
     logging.info(f'===== using gpu:{gpu_list} =====')
     return DP(model, device_ids=gpu_list)
 
+def build_distributed_model(model_name: str, gpu_id: int) -> nn.Module:
+    model = build_model(model_name)
+    logging.info(f'===== using gpu:{gpu_id} =====')
+    return DDP(model, device_ids=[gpu_id] )
 
 def build_pretrianed_model_with_dp(model_name: str, checkpoint_path: str, gpu_list: List[int]) -> nn.Module:
     model = build_pretrained_model(model_name, checkpoint_path)
@@ -109,10 +113,6 @@ def build_model(model_name: str) -> nn.Module:
 
 def build_pretrained_model(model_name: str, checkpoint_path: str) -> nn.Module:
     model = build_model(model_name)
-    raw_state = torch.load(checkpoint_path)
-    state = {}
-    for key in raw_state:
-        new_key = key[7:]  # ignore prefix: module.*
-        state[new_key] = raw_state[key]
+    state = torch.load(checkpoint_path)
     model.load_state_dict(state)
     return model

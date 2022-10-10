@@ -181,6 +181,8 @@ class SEN12MSCRDataset(Dataset):
             )
         self.file_extension = file_extension
         self.triplets = self.get_all_triplets()
+        # FOR DEBUG
+        self.triplets = self.triplets[:2048]
 
     def get_scene_ids(self, season: Season) -> List[str]:
         """ Returns a list of scene ids for a specific season.
@@ -336,7 +338,7 @@ class SEN12MSCRDataset(Dataset):
         triplet = self.triplets[index]
         s1, s2, s2_cloudy = triplet.data
         s1, s2, s2_cloudy = np.float32(s1), np.float32(s2), np.float32(s2_cloudy)
-        return np.concatenate((s1, s2_cloudy), axis=0), s2, {'scene_id': triplet.scene_id, 'patch_id': triplet.patch_id}
+        return np.concatenate((s1, s2_cloudy), axis=0), s2
 
 
 if __name__ == "__main__":

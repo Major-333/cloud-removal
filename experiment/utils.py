@@ -19,7 +19,6 @@ from models.TSOCR_V3 import TSOCR_V3
 from models.TSOCR_V1m import TSOCR_V1m
 from models.TSOCR_V2m import TSOCR_V2m
 from warmup_scheduler import GradualWarmupScheduler
-from sen12ms_cr_dataset.visualize import visualize_output_with_groundtruth, visualize_output_with_groundtruth_only_rgb, get_output_with_groundtruth_distribution_by_channel
 from matplotlib import pyplot as plt
 
 LOSS_MAPPER = {'MSE': torch.nn.MSELoss()}
@@ -88,45 +87,45 @@ def _get_media_title(name: str, scene_id: str, patch_id: str) -> str:
     return f'scene_id:{scene_id}_patch_id:{patch_id}_{name}'
 
 
-def save_all_media(epoch: int, iter_index: int, output: Tensor, cloudy: Tensor, ground_truth, rank: int,
-                   group: str) -> Dict:
-    rank = f'rank:{rank}'
-    epoch = str(epoch)
-    media_logs = {}
-    log_prefix = f'[pid:{os.getpid()}]'
-    media_path = _get_media_path(epoch, group, rank, suffix=iter_index)
-    media_title = _get_media_title(epoch, group, rank, suffix=iter_index)
-    try:
-        ground_truth = ground_truth.cpu().detach().numpy()
-        output = output.cpu().detach().numpy()
-        cloudy = cloudy.cpu().detach().numpy()
-        for channel_idx in range(output.shape[1]):
-            logging.info(f'{log_prefix} preparing channel:{channel_idx} distribution')
-            savepath = _get_media_path(epoch, group, rank, suffix=f'{iter_index}_hist')
-            get_output_with_groundtruth_distribution_by_channel(ground_truth, output, channel_idx, savepath)
-            media_logs[f'channel:{channel_idx} distribution'] = wandb.Image(plt.imread(savepath))
-        visualize_output_with_groundtruth_only_rgb(ground_truth, output, cloudy, media_path, media_title)
-        media_logs['image'] = wandb.Image(plt.imread(media_path))
-        return media_logs
-    except Exception as e:
-        logging.error(f'{log_prefix} failed to save the media: {str(e)}')
-        return {}
+# def save_all_media(epoch: int, iter_index: int, output: Tensor, cloudy: Tensor, ground_truth, rank: int,
+#                    group: str) -> Dict:
+#     rank = f'rank:{rank}'
+#     epoch = str(epoch)
+#     media_logs = {}
+#     log_prefix = f'[pid:{os.getpid()}]'
+#     media_path = _get_media_path(epoch, group, rank, suffix=iter_index)
+#     media_title = _get_media_title(epoch, group, rank, suffix=iter_index)
+#     try:
+#         ground_truth = ground_truth.cpu().detach().numpy()
+#         output = output.cpu().detach().numpy()
+#         cloudy = cloudy.cpu().detach().numpy()
+#         for channel_idx in range(output.shape[1]):
+#             logging.info(f'{log_prefix} preparing channel:{channel_idx} distribution')
+#             savepath = _get_media_path(epoch, group, rank, suffix=f'{iter_index}_hist')
+#             get_output_with_groundtruth_distribution_by_channel(ground_truth, output, channel_idx, savepath)
+#             media_logs[f'channel:{channel_idx} distribution'] = wandb.Image(plt.imread(savepath))
+#         visualize_output_with_groundtruth_only_rgb(ground_truth, output, cloudy, media_path, media_title)
+#         media_logs['image'] = wandb.Image(plt.imread(media_path))
+#         return media_logs
+#     except Exception as e:
+#         logging.error(f'{log_prefix} failed to save the media: {str(e)}')
+#         return {}
 
 
-def save_media(name: str, output: Tensor, cloudy: Tensor, ground_truth, patch_info: Dict) -> Dict:
-    media_logs = {}
-    media_path = _get_media_path(name)
-    media_title = _get_media_title(name, patch_info['scene_id'][0], patch_info['patch_id'][0])
-    try:
-        ground_truth = ground_truth.cpu().detach().numpy()
-        output = output.cpu().detach().numpy()
-        cloudy = cloudy.cpu().detach().numpy()
-        visualize_output_with_groundtruth_only_rgb(ground_truth, output, cloudy, media_path, media_title)
-        media_logs['image'] = wandb.Image(plt.imread(media_path))
-        return media_logs
-    except Exception as e:
-        logging.error(f'failed to save the media: {str(e)}')
-        return {}
+# def save_media(name: str, output: Tensor, cloudy: Tensor, ground_truth, patch_info: Dict) -> Dict:
+#     media_logs = {}
+#     media_path = _get_media_path(name)
+#     media_title = _get_media_title(name, patch_info['scene_id'][0], patch_info['patch_id'][0])
+#     try:
+#         ground_truth = ground_truth.cpu().detach().numpy()
+#         output = output.cpu().detach().numpy()
+#         cloudy = cloudy.cpu().detach().numpy()
+#         visualize_output_with_groundtruth_only_rgb(ground_truth, output, cloudy, media_path, media_title)
+#         media_logs['image'] = wandb.Image(plt.imread(media_path))
+#         return media_logs
+#     except Exception as e:
+#         logging.error(f'failed to save the media: {str(e)}')
+#         return {}
 
 
 def save_checkpoints(model: nn.Module,

@@ -35,6 +35,9 @@ class DistributedTrainer(Trainer):
         self.checkpoint_path = checkpoint_path
         if self.is_resume:
             self.resume_epoch_num = int(self.checkpoint_path.split(CHECKPOINT_NAME_PREFIX)[1])
+        # for summary
+        self.best_val_psnr = 0
+        self.best_val_ssim = 0  
 
 
 if __name__ == '__main__':

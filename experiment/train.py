@@ -9,13 +9,13 @@ from typing import Optional, Dict, List
 import torch
 from torch import nn, optim, index_copy, distributed as dist, multiprocessing as mp
 from torch.nn import functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from warmup_scheduler import GradualWarmupScheduler
 from datetime import datetime, timedelta
 from sen12ms_cr_dataset.build import build_loaders
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
+from evaluate import EvaluateType, Evaluater
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'epoch'
@@ -43,6 +43,9 @@ class Trainer(object):
         self.checkpoint_path = checkpoint_path
         if self.is_resume:
             self.resume_epoch_num = int(self.checkpoint_path.split(CHECKPOINT_NAME_PREFIX)[1])
+        # for summary
+        self.best_val_psnr = 0
+        self.best_val_ssim = 0  
 
 
     def _parse_config(self, config: Dict):
@@ -73,17 +76,17 @@ class Trainer(object):
         scheduler.step()
         return scheduler
 
-    def _update_summary(self, metric: Dict, epoch: int):
+    def _update_summary(self, metric: Dict, epoch: int, metric_prefix: str):
         is_update = False
-        if metric[f'val_psnr'] > self.best_val_psnr:
-            self.best_val_psnr = metric[f'val_psnr']
+        if metric[f'{metric_prefix}_psnr'] > self.best_val_psnr:
+            self.best_val_psnr = metric[f'{metric_prefix}_psnr']
             self.best_val_psnr_epoch = epoch
             logging.info(f'best val psnr update:{self.best_val_psnr}, on epoch:{epoch}')
             wandb.run.summary['best_val_psnr'] = self.best_val_psnr
             wandb.run.summary['best_val_psnr_epoch'] = epoch
             is_update = True
-        if metric[f'val_ssim'] > self.best_val_ssim:
-            self.best_val_ssim = metric[f'val_ssim']
+        if metric[f'{metric_prefix}_ssim'] > self.best_val_ssim:
+            self.best_val_ssim = metric[f'{metric_prefix}_ssim']
             self.best_val_ssim_epoch = epoch
             logging.info(f'best val ssim update:{self.best_val_ssim}, on epoch:{epoch}')
             wandb.run.summary['best_val_ssim'] = self.best_val_ssim
@@ -111,7 +114,7 @@ class Trainer(object):
                          epoch: int,
                          start_time: str,
                          filename_prefix: Optional[str] = None,
-                         suffix: Optional[str] = None):                                                                \
+                         suffix: Optional[str] = None):
                                                                         pass
 
     # model_name = wandb.config['model']
@@ -129,9 +132,6 @@ class Trainer(object):
     # logging.info(f'will save the model to:{file_path}')
     # torch.save(model.state_dict(), file_path)
 
-    def _run_epoch(self) -> Dict:
-        pass
-
     def train(self) -> None:
         for epoch in range(1, self.max_epoch + 1):
             self.model.train()
@@ -147,15 +147,11 @@ class Trainer(object):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
-                    # TODO: visualize
                 training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
-
-                    # TODO: Evaluate
-                    # metric = Evaluater.evaluate(self.model, self.val_loader, prefix='val')
-                    # training_info = training_info | metric
-                    # self._update_summary(metric, epoch)
-                    pass
+                    metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
+                    training_info = {**training_info, **metric}
+                    self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
             self._logs(training_info)
             self.scheduler.step()
         self._finish()

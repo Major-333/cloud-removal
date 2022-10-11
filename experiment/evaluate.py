@@ -1,6 +1,7 @@
 import logging
 import argparse
 import json
+import enum
 from typing import Optional, Dict, Tuple
 from tqdm import tqdm
 import os
@@ -11,44 +12,48 @@ from metrics.pixel_metric import get_psnr, get_rmse, get_mae
 from metrics.structure_metric import get_sam
 from utils import parse_wandb_yaml, load_ddp_checkpoint, CHECKPOINT_NAME_PREFIX
 from piq import ssim
-from models.mprnet import MPRNet
-from init_helper import InitHelper
 
 CONFIG_FILEPATH = './config-defaults.yaml'
 
+class Metric(object):
+    def __init__(self, rmse: float, psnr: float, ssim: float, sam: float, mae: float) -> None:
+        self.rmse = rmse
+        self.psnr = psnr
+        self.ssim = ssim
+        self.sam = sam
+        self.mae = mae
+
+    def to_dict(self, prefix_name: str = None) -> Dict:
+        if prefix_name:
+            prefix_name = f'_{prefix_name}'
+        return {
+            f'{prefix_name}rmse': self.rmse,
+            f'{prefix_name}psnr': self.psnr,
+            f'{prefix_name}ssim': self.ssim,
+            f'{prefix_name}sam': self.sam,
+            f'{prefix_name}mae': self.mae,
+        }
+
+class EvaluateType(enum.Enum):
+    VALIDATE = 'validate'
+    TEST = 'test'
+
 
 class Evaluater(object):
-
-    def __init__(self,
-                 config: Dict,
-                 device: str,
-                 overwrite: Optional[bool] = False,
-                 only_test: Optional[bool] = False) -> None:
-        self._config = config
-        self._device = device
-        self._overwrite = overwrite
-        self._only_test = only_test
-        self._init_helper = InitHelper(self._config)
-
-    def _setup(self):
-        self.train_loader = self._init_helper.init_dsen2cr_dataloader(self._config['train_dir'])
-        self.test_loader = self._init_helper.init_dsen2cr_dataloader(self._config['test_dir'])
-        self.model = self._init_helper.init_model()
-
+    def __init__(self) -> None:
+        pass
+    
     @staticmethod
-    def evaluate(model: nn.Module, dataloader: DataLoader, prefix: Optional[str] = None) -> Dict:
+    def evaluate(model: nn.Module, dataloader: DataLoader, eval_type: EvaluateType) -> Dict:
         model.eval()
-        num_val_batches = len(dataloader)
+        batch_count = len(dataloader)
         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
-        print(f'batch size:{dataloader.batch_size}, loader length is: {len(dataloader)}')
-        for index, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {prefix} round')):
-            cloudy, ground_truth, patch_info = data_batch
+        logging.info(f'batch size:{dataloader.batch_size}, loader length is: {batch_count}')
+        for _, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {eval_type} round')):
+            cloudy, ground_truth = data_batch
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():
-                if isinstance(model, MPRNet):
-                    output = model(cloudy)[2]
-                else:
-                    output = model(cloudy)
+                output = model(cloudy)
                 output[output < 0] = 0
                 output[output > 255] = 255
                 total_rmse += get_rmse(output, ground_truth).item()
@@ -56,48 +61,95 @@ class Evaluater(object):
                 total_ssim += ssim(output, ground_truth, data_range=255.).item()
                 total_sam += get_sam(ground_truth, output).item()
                 total_mae += get_mae(ground_truth, output).item()
-        metric = {
-            f'{prefix}_rmse': total_rmse / num_val_batches,
-            f'{prefix}_psnr': total_psnr / num_val_batches,
-            f'{prefix}_ssim': total_ssim / num_val_batches,
-            f'{prefix}_sam': total_sam / num_val_batches,
-            f'{prefix}_mae': total_mae / num_val_batches,
+        return {
+            f'{eval_type.value}_rmse': total_rmse / batch_count,
+            f'{eval_type.value}_psnr': total_psnr / batch_count,
+            f'{eval_type.value}_ssim': total_ssim / batch_count,
+            f'{eval_type.value}_sam': total_sam / batch_count,
+            f'{eval_type.value}_mae': total_mae / batch_count,
         }
-        return metric
 
-    def evaluate_checkpoint(self, checkpoint_path: str) -> Dict:
-        self._setup()
-        logging.info(f'will evaluate the checkpoint:{checkpoint_path}')
-        print(f'model state:\n{self.model.state_dict().keys()}')
-        trained_model = load_ddp_checkpoint(self.model, checkpoint_path, self._device)
-        metric = self.evaluate(trained_model, self.test_loader, prefix='test')
-        if not self._only_test:
-            train_metric = self.evaluate(trained_model, self.train_loader, prefix='train')
-            metric = train_metric | metric
-        checkpoints_dir = os.path.dirname(checkpoint_path)
-        metric_filename = f'{os.path.basename(checkpoint_path).split(".")[0]}.json'
-        metric_filepath = os.path.join(checkpoints_dir, metric_filename)
-        logging.info(f'will save the metric to:{metric_filepath}')
-        with open(metric_filepath, 'w') as fp:
-            json.dump(metric, fp)
+# class OldEvaluater(object):
 
-    @staticmethod
-    def sort_checkpoint_names(file_names: str):
-        checkpoint_names = [name for name in file_names if not name.endswith('.json')]
-        checkpoint_names = sorted(checkpoint_names,
-                                  key=lambda name: int(name.replace(CHECKPOINT_NAME_PREFIX, '')),
-                                  reverse=True)
-        return checkpoint_names
+#     def __init__(self,
+#                  config: Dict,
+#                  device: str,
+#                  overwrite: Optional[bool] = False,
+#                  only_test: Optional[bool] = False) -> None:
+#         self._config = config
+#         self._device = device
+#         self._overwrite = overwrite
+#         self._only_test = only_test
+#         self._init_helper = InitHelper(self._config)
 
-    def evaluate_all_checkpoints(self, checkpoints_dir: str):
-        file_names = os.listdir(checkpoints_dir)
-        checkpoint_names = self.sort_checkpoint_names(file_names)
-        for checkpoint_name in checkpoint_names:
-            checkpoint_path = os.path.join(checkpoints_dir, checkpoint_name)
-            metric_filename = f'{checkpoint_name}.json'
-            if not self._overwrite and metric_filename in file_names:
-                continue
-            self.evaluate_checkpoint(checkpoint_path)
+#     def _setup(self):
+#         self.train_loader = self._init_helper.init_dsen2cr_dataloader(self._config['train_dir'])
+#         self.test_loader = self._init_helper.init_dsen2cr_dataloader(self._config['test_dir'])
+#         self.model = self._init_helper.init_model()
+
+#     @staticmethod
+#     def evaluate(model: nn.Module, dataloader: DataLoader, prefix: Optional[str] = None) -> Dict:
+#         model.eval()
+#         num_val_batches = len(dataloader)
+#         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
+#         print(f'batch size:{dataloader.batch_size}, loader length is: {len(dataloader)}')
+#         for index, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {prefix} round')):
+#             cloudy, ground_truth, patch_info = data_batch
+#             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
+#             with torch.no_grad():
+#                 if isinstance(model, MPRNet):
+#                     output = model(cloudy)[2]
+#                 else:
+#                     output = model(cloudy)
+#                 output[output < 0] = 0
+#                 output[output > 255] = 255
+#                 total_rmse += get_rmse(output, ground_truth).item()
+#                 total_psnr += get_psnr(output, ground_truth).item()
+#                 total_ssim += ssim(output, ground_truth, data_range=255.).item()
+#                 total_sam += get_sam(ground_truth, output).item()
+#                 total_mae += get_mae(ground_truth, output).item()
+#         metric = {
+#             f'{prefix}_rmse': total_rmse / num_val_batches,
+#             f'{prefix}_psnr': total_psnr / num_val_batches,
+#             f'{prefix}_ssim': total_ssim / num_val_batches,
+#             f'{prefix}_sam': total_sam / num_val_batches,
+#             f'{prefix}_mae': total_mae / num_val_batches,
+#         }
+#         return metric
+
+#     def evaluate_checkpoint(self, checkpoint_path: str) -> Dict:
+#         self._setup()
+#         logging.info(f'will evaluate the checkpoint:{checkpoint_path}')
+#         print(f'model state:\n{self.model.state_dict().keys()}')
+#         trained_model = load_ddp_checkpoint(self.model, checkpoint_path, self._device)
+#         metric = self.evaluate(trained_model, self.test_loader, prefix='test')
+#         if not self._only_test:
+#             train_metric = self.evaluate(trained_model, self.train_loader, prefix='train')
+#             metric = train_metric | metric
+#         checkpoints_dir = os.path.dirname(checkpoint_path)
+#         metric_filename = f'{os.path.basename(checkpoint_path).split(".")[0]}.json'
+#         metric_filepath = os.path.join(checkpoints_dir, metric_filename)
+#         logging.info(f'will save the metric to:{metric_filepath}')
+#         with open(metric_filepath, 'w') as fp:
+#             json.dump(metric, fp)
+
+#     @staticmethod
+#     def sort_checkpoint_names(file_names: str):
+#         checkpoint_names = [name for name in file_names if not name.endswith('.json')]
+#         checkpoint_names = sorted(checkpoint_names,
+#                                   key=lambda name: int(name.replace(CHECKPOINT_NAME_PREFIX, '')),
+#                                   reverse=True)
+#         return checkpoint_names
+
+#     def evaluate_all_checkpoints(self, checkpoints_dir: str):
+#         file_names = os.listdir(checkpoints_dir)
+#         checkpoint_names = self.sort_checkpoint_names(file_names)
+#         for checkpoint_name in checkpoint_names:
+#             checkpoint_path = os.path.join(checkpoints_dir, checkpoint_name)
+#             metric_filename = f'{checkpoint_name}.json'
+#             if not self._overwrite and metric_filename in file_names:
+#                 continue
+#             self.evaluate_checkpoint(checkpoint_path)
 
 
 def get_args():

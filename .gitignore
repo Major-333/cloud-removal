@@ -12,3 +12,4 @@ experiment/data*
 *dist/
 *.*info
 *debug*
+*runs*

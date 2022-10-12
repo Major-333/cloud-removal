@@ -17,15 +17,17 @@ from sen12ms_cr_dataset.build import build_distributed_loaders
 from models.build import build_distributed_model
 from loss.build import build_loss_fn
 from train import Trainer, CHECKPOINT_NAME_PREFIX
+from evaluate import Evaluater, EvaluateType
 
 class DistributedTrainer(Trainer):
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
-        self.rank = local_rank
+        self.local_rank = local_rank
         # initialize PyTorch distributed using environment variables (you could also do this more explicitly by specifying `rank` and `world_size`,
         #  but I find using environment variables makes it so that you can easily use the same script on different machines)
         dist.init_process_group(backend='nccl', init_method='env://')
         torch.cuda.set_device(f'cuda:{local_rank}')
         self._parse_config(config)
+        self.config = config
         self.train_loader, self.val_loader, self.test_loader = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
         self.model = build_distributed_model(self.model_name, gpu_id=local_rank)
         self.loss_fn = build_loss_fn(self.loss_name)
@@ -37,8 +39,40 @@ class DistributedTrainer(Trainer):
             self.resume_epoch_num = int(self.checkpoint_path.split(CHECKPOINT_NAME_PREFIX)[1])
         # for summary
         self.best_val_psnr = 0
-        self.best_val_ssim = 0  
+        self.best_val_ssim = 0
+        # for save.
+        if self.local_rank == 0:
+            self.train_exp_dir = self._get_train_exp_dir()
 
+    def train(self) -> None:
+        for epoch in range(1, self.max_epoch + 1):
+            self.model.train()
+            epoch_loss = 0.0
+            training_info = {'learning rate': self.optimizer.param_groups[0]['lr']}
+            if not self.is_resume or epoch > self.resume_epoch_num:
+                # let all processes sync up before starting with a new epoch of training
+                dist.barrier()
+                for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
+                    self.optimizer.zero_grad()
+                    cloudy, ground_truth = data_batch
+                    cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
+                    output = self.model(cloudy)
+                    loss = self.loss_fn(output, ground_truth)
+                    loss.backward()
+                    self.optimizer.step()
+                    epoch_loss += loss
+                training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
+                if epoch % self.validate_every == 0:
+                    # let all processes sync up before starting with a new epoch of validating
+                    dist.barrier()
+                    metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
+                    training_info = {**training_info, **metric}
+                    is_update = self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
+                    if is_update and self.local_rank == 0:
+                        self._save(self.model, epoch)
+            self._logs(training_info)
+            self.scheduler.step()
+        self._finish()
 
 if __name__ == '__main__':
     logging.basicConfig(filename='train.log',

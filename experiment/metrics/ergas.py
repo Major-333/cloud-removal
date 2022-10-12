@@ -18,8 +18,3 @@ def get_ergas(img_fake, img_real, scale=4):
     else:
         raise ValueError('Wrong input image dimensions.')
 
-import torch
-from torch import tensor
-
-def get_ergas(img_predict: tensor, img_true: tensor) -> float:
-    pass

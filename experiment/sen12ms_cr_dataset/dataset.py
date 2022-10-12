@@ -181,8 +181,6 @@ class SEN12MSCRDataset(Dataset):
             )
         self.file_extension = file_extension
         self.triplets = self.get_all_triplets()
-        # FOR DEBUG
-        # self.triplets = self.triplets[:2048]
 
     def get_scene_ids(self, season: Season) -> List[str]:
         """ Returns a list of scene ids for a specific season.

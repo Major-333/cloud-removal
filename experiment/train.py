@@ -1,3 +1,4 @@
+import shutil
 import os
 import sys
 import wandb
@@ -16,10 +17,17 @@ from sen12ms_cr_dataset.build import build_loaders
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
 from evaluate import EvaluateType, Evaluater
+from utils import increment_path
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
-CHECKPOINT_NAME_PREFIX = 'epoch'
+CHECKPOINT_NAME_PREFIX = 'Epoch'
+TRAIN_SUBDIR_NAME = 'train'
+VAL_SUBDIR_NAME = 'val'
+EXP_SUBDIR_NAME = 'exp'
+WEIGHTS_DIR_NAME = 'weights'
+CONFIG_NAME = 'config.yaml'
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+WANDB_CONFIG = 'config-defaults.yaml'
 
 def init_wandb_with_dp(group: str) -> Dict:
     wandb.init(project='cloud removal V2', group=group, job_type='DP mode')
@@ -32,6 +40,7 @@ class Trainer(object):
 
     def __init__(self, config: Dict, gpus: List[int], checkpoint_path: Optional[str] = None) -> None:
         self._parse_config(config)
+        self.config = config.copy()
         self.gpus = gpus
         self.train_loader, self.val_loader, self.test_loader = build_loaders(self.dataset_path, self.batch_size,
                                                                              self.dataset_file_extension)
@@ -45,8 +54,17 @@ class Trainer(object):
             self.resume_epoch_num = int(self.checkpoint_path.split(CHECKPOINT_NAME_PREFIX)[1])
         # for summary
         self.best_val_psnr = 0
-        self.best_val_ssim = 0  
+        self.best_val_ssim = 0
+        # for save.
+        self.train_exp_dir = self._get_train_exp_dir()
 
+    def _get_train_exp_dir(self) -> str:
+        exp_dir = os.path.join(self.save_dir, TRAIN_SUBDIR_NAME, EXP_SUBDIR_NAME)
+        exp_dir = increment_path(exp_dir)
+        # save metadata info
+        config_path = os.path.join(exp_dir, CONFIG_NAME)
+        shutil.copyfile(WANDB_CONFIG, config_path)
+        return exp_dir
 
     def _parse_config(self, config: Dict):
         self.max_epoch = config['epochs']
@@ -76,7 +94,7 @@ class Trainer(object):
         scheduler.step()
         return scheduler
 
-    def _update_summary(self, metric: Dict, epoch: int, metric_prefix: str):
+    def _update_summary(self, metric: Dict, epoch: int, metric_prefix: str) -> bool:
         is_update = False
         if metric[f'{metric_prefix}_psnr'] > self.best_val_psnr:
             self.best_val_psnr = metric[f'{metric_prefix}_psnr']
@@ -92,8 +110,7 @@ class Trainer(object):
             wandb.run.summary['best_val_ssim'] = self.best_val_ssim
             wandb.run.summary['best_val_ssim_epoch'] = epoch
             is_update = True
-        if is_update:
-            self.save_checkpoints(self.model, epoch, start_time=START_TIME)
+        return is_update            
 
     @property
     def is_resume(self) -> bool:
@@ -109,28 +126,15 @@ class Trainer(object):
         logging.info(f'=== The training is complete. ===')
         wandb.finish()
 
-    def save_checkpoints(self,
-                         model: nn.Module,
-                         epoch: int,
-                         start_time: str,
-                         filename_prefix: Optional[str] = None,
-                         suffix: Optional[str] = None):
-                                                                        pass
-
-    # model_name = wandb.config['model']
-    # checkpoints_dir = wandb.config['checkpoints_dir']
-    # subdir_name = f'{model_name}_{start_time}'
-    # filename = f'epoch{str(epoch)}'
-    # if filename_prefix:
-    #     filename = f'{filename_prefix}_{filename}'
-    # if suffix:
-    #     filename = f'{filename}_{suffix}'
-    # subdir_path = os.path.join(checkpoints_dir, subdir_name)
-    # if not os.path.isdir(subdir_path):
-    #     os.makedirs(subdir_path)
-    # file_path = os.path.join(subdir_path, filename)
-    # logging.info(f'will save the model to:{file_path}')
-    # torch.save(model.state_dict(), file_path)
+    def _save(self, model: nn.Module, epoch: int) -> None:
+        weights_dir = os.path.join(self.train_exp_dir, WEIGHTS_DIR_NAME)
+        if not os.path.exists(weights_dir):
+            os.makedirs(weights_dir)
+        checkpoint_name = f'{CHECKPOINT_NAME_PREFIX}{epoch}.pt'
+        file_path = os.path.join(weights_dir, checkpoint_name)
+        logging.info(f'Will save model into{file_path}')
+        print(f'Will save model into{file_path}')
+        torch.save(model.module.state_dict(), file_path)
 
     def train(self) -> None:
         for epoch in range(1, self.max_epoch + 1):
@@ -151,7 +155,9 @@ class Trainer(object):
                 if epoch % self.validate_every == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
                     training_info = {**training_info, **metric}
-                    self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
+                    is_update = self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
+                    if is_update:
+                        self._save(self.model, epoch)
             self._logs(training_info)
             self.scheduler.step()
         self._finish()

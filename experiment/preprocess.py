@@ -24,6 +24,5 @@ if __name__ == '__main__':
     args = get_args()
     preprocessed_dir = args.preprocessed_dir
     origin_dir = args.origin_dir
-    preprocess = Preprocess(origin_dir, preprocessed_dir, parallel_num=4, overwrite=True, convert_to_uint8=False, is_crop=True)
-    # about 4 mins on gpu04
+    preprocess = Preprocess(origin_dir, preprocessed_dir, parallel_num=4, convert_to_uint8=False, is_crop=True)
     preprocess.multiple_run()

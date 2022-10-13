@@ -18,15 +18,17 @@ from models.build import build_distributed_model
 from loss.build import build_loss_fn
 from train import Trainer, CHECKPOINT_NAME_PREFIX
 from evaluate import Evaluater, EvaluateType
+from utils import setup_seed
 
 class DistributedTrainer(Trainer):
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
+        self._parse_config(config)
+        setup_seed(self.seed)
         self.local_rank = local_rank
         # initialize PyTorch distributed using environment variables (you could also do this more explicitly by specifying `rank` and `world_size`,
         #  but I find using environment variables makes it so that you can easily use the same script on different machines)
         dist.init_process_group(backend='nccl', init_method='env://')
         torch.cuda.set_device(f'cuda:{local_rank}')
-        self._parse_config(config)
         self.config = config
         self.train_loader, self.val_loader, self.test_loader = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
         self.model = build_distributed_model(self.model_name, gpu_id=local_rank)

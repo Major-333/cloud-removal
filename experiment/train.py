@@ -17,7 +17,7 @@ from sen12ms_cr_dataset.build import build_loaders
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
 from evaluate import EvaluateType, Evaluater
-from utils import increment_path
+from utils import increment_path, setup_seed
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'Epoch'
@@ -35,11 +35,11 @@ def init_wandb_with_dp(group: str) -> Dict:
     logging.info(f'config is:{config}')
     return config
 
-
 class Trainer(object):
 
     def __init__(self, config: Dict, gpus: List[int], checkpoint_path: Optional[str] = None) -> None:
         self._parse_config(config)
+        setup_seed(self.seed)
         self.config = config.copy()
         self.gpus = gpus
         self.train_loader, self.val_loader, self.test_loader = build_loaders(self.dataset_path, self.batch_size,
@@ -77,6 +77,7 @@ class Trainer(object):
         self.validate_every = config['validate_every']
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
+        self.seed = config['seed']
 
     def _get_optimizer(self, model: nn.Module) -> Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr)

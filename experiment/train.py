@@ -13,11 +13,11 @@ from torch.nn import functional as F
 from torch.optim import Optimizer
 from warmup_scheduler import GradualWarmupScheduler
 from datetime import datetime, timedelta
-from sen12ms_cr_dataset.build import build_loaders
+from sen12ms_cr_dataset.build import build_distributed_loaders_with_rois, build_loaders, build_loaders_with_rois
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
 from evaluate import EvaluateType, Evaluater
-from utils import increment_path
+from utils import get_rois_from_split_file, increment_path, setup_seed
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'Epoch'
@@ -25,9 +25,9 @@ TRAIN_SUBDIR_NAME = 'train'
 VAL_SUBDIR_NAME = 'val'
 EXP_SUBDIR_NAME = 'exp'
 WEIGHTS_DIR_NAME = 'weights'
-CONFIG_NAME = 'config.yaml'
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-WANDB_CONFIG = 'config-defaults.yaml'
+CONFIG_FILENAME = 'config-defaults.yaml'
+DEFAULT_SPLIT_FILENAME = 'split.yaml'
 
 def init_wandb_with_dp(group: str) -> Dict:
     wandb.init(project='cloud removal V2', group=group, job_type='DP mode')
@@ -39,11 +39,17 @@ def init_wandb_with_dp(group: str) -> Dict:
 class Trainer(object):
 
     def __init__(self, config: Dict, gpus: List[int], checkpoint_path: Optional[str] = None) -> None:
+        # Load config to trainer
         self._parse_config(config)
-        self.config = config.copy()
+        self.config = config
+        # Fix random seed for reproducibility
+        setup_seed(self.seed)
+        # Init dataloader
+        train_rois, val_rois, test_rois = get_rois_from_split_file(self.split_file_path)
+        self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
+        self.val_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        # Init model and optim
         self.gpus = gpus
-        self.train_loader, self.val_loader, self.test_loader = build_loaders(self.dataset_path, self.batch_size,
-                                                                             self.dataset_file_extension)
         self.model = build_model_with_dp(self.model_name, self.gpus)
         self.loss_fn = build_loss_fn(self.loss_name)
         self.optimizer = self._get_optimizer(self.model)
@@ -62,8 +68,10 @@ class Trainer(object):
         exp_dir = os.path.join(self.save_dir, TRAIN_SUBDIR_NAME, EXP_SUBDIR_NAME)
         exp_dir = increment_path(exp_dir)
         # save metadata info
-        config_path = os.path.join(exp_dir, CONFIG_NAME)
-        shutil.copyfile(WANDB_CONFIG, config_path)
+        config_path = os.path.join(exp_dir, CONFIG_FILENAME)
+        shutil.copyfile(CONFIG_FILENAME, config_path)
+        split_file_path = os.path.join(exp_dir, DEFAULT_SPLIT_FILENAME)
+        shutil.copyfile(self.split_file_path, split_file_path)
         return exp_dir
 
     def _parse_config(self, config: Dict):
@@ -77,6 +85,8 @@ class Trainer(object):
         self.validate_every = config['validate_every']
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
+        self.seed = config['seed']
+        self.split_file_path = config['split_file_path']
 
     def _get_optimizer(self, model: nn.Module) -> Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr)

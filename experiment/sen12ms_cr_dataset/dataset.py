@@ -54,6 +54,12 @@ class Sensor(Enum):
     s2cloudy = "s2_cloudy"
 
 
+class Roi(object):
+    def __init__(self, season: Season, scene_id: str) -> None:
+        self.season = season
+        self.scene_id = scene_id
+
+
 class SEN12MSCRTriplet(object):
 
     SUPPORTED_EXTENSIONS = ['tif', 'npy', 'npz']
@@ -67,6 +73,23 @@ class SEN12MSCRTriplet(object):
             raise ValueError(
                 f'file_extension:{file_extension} is not supported. Only support:{self.SUPPORTED_EXTENSIONS}')
         self.file_extension = file_extension
+
+    def in_roi(self, roi: Roi) -> bool:
+        if int(self.scene_id) != int(roi.scene_id):
+            return False
+        if self.season.value != roi.season.value:
+            return False
+        return True
+
+    def in_rois(self, rois: List[Roi]) -> bool:
+        for roi in rois:
+            if self.in_roi(roi):
+                return True
+        return False
+
+    @property
+    def roi(self) -> Roi:
+        return Roi(scene_id=self.scene_id, season=self.season)
 
     @property
     def data(self) -> Tuple[np.array, np.array, np.array]:
@@ -155,7 +178,6 @@ class SEN12MSCRTriplet(object):
         self._save_patch(s2_path, s2)
         self._save_patch(s2_cloudy_path, s2_cloudy)
 
-
 class SEN12MSCRDataset(Dataset):
     """ Generic data loading routines for the SEN12MS-CR dataset of corresponding Sentinel 1,
     Sentinel 2 and cloudy Sentinel 2 data.
@@ -171,7 +193,7 @@ class SEN12MSCRDataset(Dataset):
     Note: The order in which you request the bands is the same order they will be returned in.
     """
 
-    def __init__(self, base_dir, file_extension: str = 'tif'):
+    def __init__(self, base_dir, file_extension: str = 'tif', rois: List[Roi] = None):
         self.base_dir = base_dir
         if not os.path.exists(self.base_dir):
             raise Exception(f'SEN12MSCRDataset faled to init. base_dir:{base_dir} does not exist')
@@ -180,7 +202,12 @@ class SEN12MSCRDataset(Dataset):
                 f'file_extension:{file_extension} is not supported. Only support:{SEN12MSCRTriplet.SUPPORTED_EXTENSIONS}'
             )
         self.file_extension = file_extension
+        self.rois = rois
         self.triplets = self.get_all_triplets()
+
+    @property
+    def filter_by_roi(self) -> bool:
+        return self.rois
 
     def get_scene_ids(self, season: Season) -> List[str]:
         """ Returns a list of scene ids for a specific season.
@@ -318,16 +345,17 @@ class SEN12MSCRDataset(Dataset):
         return np.stack(s1_data, axis=0), np.stack(s2_data, axis=0), np.stack(s2cloudy_data, axis=0), bounds
 
     def get_all_triplets(self) -> List[SEN12MSCRTriplet]:
-        patches = []
+        triplets = []
         for season_value in Season.ALL.value:
             season = Season(season_value)
             scene_list = self.get_scene_ids(season)
             for sid in scene_list:
                 patch_list = self.get_patch_ids(season, sid)
                 for pid in patch_list:
-                    patch = SEN12MSCRTriplet(self.base_dir, season, sid, pid, self.file_extension)
-                    patches.append(patch)
-        return patches
+                    triplet = SEN12MSCRTriplet(self.base_dir, season, sid, pid, self.file_extension)
+                    if not self.filter_by_roi or triplet.in_rois(self.rois):
+                        triplets.append(triplet)
+        return triplets
 
     def __len__(self):
         return len(self.triplets)

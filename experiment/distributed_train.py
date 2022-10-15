@@ -13,22 +13,30 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from warmup_scheduler import GradualWarmupScheduler
 from datetime import datetime, timedelta
-from sen12ms_cr_dataset.build import build_distributed_loaders
+from sen12ms_cr_dataset.build import build_distributed_loaders, build_distributed_loaders_with_rois
 from models.build import build_distributed_model
 from loss.build import build_loss_fn
 from train import Trainer, CHECKPOINT_NAME_PREFIX
 from evaluate import Evaluater, EvaluateType
+from utils import setup_seed, get_rois_from_split_file
 
 class DistributedTrainer(Trainer):
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
-        self.local_rank = local_rank
+        # Load config to trainer
+        self._parse_config(config)
+        self.config = config
+        # Fix random seed for reproducibility
+        setup_seed(self.seed)
         # initialize PyTorch distributed using environment variables (you could also do this more explicitly by specifying `rank` and `world_size`,
         #  but I find using environment variables makes it so that you can easily use the same script on different machines)
         dist.init_process_group(backend='nccl', init_method='env://')
+        self.local_rank = local_rank
         torch.cuda.set_device(f'cuda:{local_rank}')
-        self._parse_config(config)
-        self.config = config
-        self.train_loader, self.val_loader, self.test_loader = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
+        # Init dataloader
+        train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
+        self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
+        self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        # Init model and optim
         self.model = build_distributed_model(self.model_name, gpu_id=local_rank)
         self.loss_fn = build_loss_fn(self.loss_name)
         self.optimizer = self._get_optimizer(self.model)

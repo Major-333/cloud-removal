@@ -1,10 +1,13 @@
-from typing import Optional, Dict, Tuple
-import logging
+from typing import Dict, Tuple, List
 import os
+import sys
 import yaml
-import wandb
+import logging
 import torch
 from torch import nn
+import numpy as np
+import random
+from sen12ms_cr_dataset.dataset import Roi, Season
 
 def init_weights(m: nn.Module):
     if isinstance(m, nn.Conv2d):
@@ -29,3 +32,36 @@ def increment_path(dir_path: str, sep='') -> str:
             os.makedirs(next_dir_path)
             return next_dir_path
     return None
+
+def config_logging():
+    file_handler = logging.FileHandler(filename='train.log')
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    handlers = [file_handler, stdout_handler]
+    logging.basicConfig(level=logging.INFO,
+                        format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
+                        handlers=handlers)
+
+def setup_seed(seed: int):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+def roi_to_str(roi: Roi) -> str:
+    return f'{roi.season.value}_{roi.scene_id}'
+
+def str_to_roi(roi_str: str) -> Roi:
+    scene_id = roi_str.rsplit('_', 1)[-1]
+    season = Season(roi_str.rsplit('_', 1)[0])
+    return Roi(season, scene_id)
+
+def get_rois_from_split_file(split_file_path: str) -> Tuple[List[Roi], List[Roi], List[Roi]]:
+    if not os.path.isfile(split_file_path):
+        raise ValueError(f'Split file:{split_file_path} does\'nt exist!')
+    with open(split_file_path, 'r') as f:
+        split_config = yaml.safe_load(f)
+    train_rois = [str_to_roi(roi_str) for roi_str in split_config['rois']['train']]
+    val_rois = [str_to_roi(roi_str) for roi_str in split_config['rois']['val']]
+    test_rois = [str_to_roi(roi_str) for roi_str in split_config['rois']['test']]
+    return train_rois, val_rois, test_rois

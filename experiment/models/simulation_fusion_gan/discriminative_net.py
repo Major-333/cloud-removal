@@ -2,6 +2,7 @@ import torch.nn as nn
 
 
 class DiscriminativeNet(nn.Module):
+
     def __init__(self, in_channels):
         super(DiscriminativeNet, self).__init__()
         self.down1 = Down(in_channels, 64)

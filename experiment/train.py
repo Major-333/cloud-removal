@@ -96,12 +96,11 @@ class Trainer(object):
         warmup_epochs = 3
         # 3-500 完成一次余弦
         scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, 30, eta_min=min_lr)
-        # 3 warmuo
+        # 3 warmup
         scheduler = GradualWarmupScheduler(optimizer,
                                            multiplier=1,
                                            total_epoch=warmup_epochs,
                                            after_scheduler=scheduler_cosine)
-        scheduler.step()
         return scheduler
 
     def _update_summary(self, metric: Dict, epoch: int, metric_prefix: str) -> bool:

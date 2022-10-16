@@ -29,6 +29,7 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 CONFIG_FILENAME = 'config-defaults.yaml'
 DEFAULT_SPLIT_FILENAME = 'split.yaml'
 
+
 def init_wandb_with_dp(group: str) -> Dict:
     wandb.init(project='cloud removal V2', group=group, job_type='DP mode')
     config = wandb.config
@@ -46,8 +47,10 @@ class Trainer(object):
         setup_seed(self.seed)
         # Init dataloader
         train_rois, val_rois, test_rois = get_rois_from_split_file(self.split_file_path)
-        self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
-        self.val_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension,
+                                                    train_rois)
+        self.val_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension,
+                                                  val_rois)
         # Init model and optim
         self.gpus = gpus
         self.model = build_model_with_dp(self.model_name, self.gpus)
@@ -126,7 +129,7 @@ class Trainer(object):
             wandb.run.summary['best_val_ssim'] = self.best_val_ssim
             wandb.run.summary['best_val_ssim_epoch'] = epoch
             is_update = True
-        return is_update            
+        return is_update
 
     @property
     def is_resume(self) -> bool:
@@ -167,7 +170,7 @@ class Trainer(object):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
-                training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
+                training_info = {**training_info, **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
                     training_info = {**training_info, **metric}

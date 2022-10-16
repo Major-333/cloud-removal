@@ -170,8 +170,6 @@ class Trainer(object):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
-                    print(loss)
-                    input()
                 training_info = {**training_info, **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)

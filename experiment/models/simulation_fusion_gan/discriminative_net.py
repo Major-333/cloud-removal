@@ -2,6 +2,7 @@ import torch.nn as nn
 
 
 class DiscriminativeNet(nn.Module):
+
     def __init__(self, in_channels):
         super(DiscriminativeNet, self).__init__()
         self.down1 = Down(in_channels, 64)
@@ -18,14 +19,10 @@ class DiscriminativeNet(nn.Module):
 
 
 class Down(nn.Module):
+
     def __init__(self, in_channels, out_channels):
         super(Down, self).__init__()
-        self.conv = nn.Conv2d(in_channels,
-                              out_channels,
-                              kernel_size=4,
-                              stride=2,
-                              padding=1,
-                              bias=False)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False)
         self.batch_norm = nn.BatchNorm2d(out_channels)
         self.leakey_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
@@ -37,14 +34,10 @@ class Down(nn.Module):
 
 
 class MiddleConv(nn.Module):
+
     def __init__(self, in_channels, out_channels):
         super(MiddleConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels,
-                              out_channels,
-                              kernel_size=4,
-                              stride=1,
-                              padding=1,
-                              bias=False)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=1, padding=1, bias=False)
         self.leakey_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, last_feature_map):
@@ -54,14 +47,10 @@ class MiddleConv(nn.Module):
 
 
 class OutConv(nn.Module):
+
     def __init__(self, in_channels):
         super(OutConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels,
-                              1,
-                              kernel_size=4,
-                              stride=1,
-                              padding=1,
-                              bias=False)
+        self.conv = nn.Conv2d(in_channels, 1, kernel_size=4, stride=1, padding=1, bias=False)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, last_feature_map):

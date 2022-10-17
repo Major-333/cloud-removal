@@ -20,7 +20,9 @@ from train import Trainer, CHECKPOINT_NAME_PREFIX
 from evaluate import Evaluater, EvaluateType
 from utils import setup_seed, get_rois_from_split_file, DEFAULT_LOG_FILENAME, config_logging
 
+
 class DistributedTrainer(Trainer):
+
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
         # Load config to trainer
         self._parse_config(config)
@@ -36,11 +38,14 @@ class DistributedTrainer(Trainer):
         if self.split_file_path:
             logging.info(f'use spit file:{self.split_file_path}')
             train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
-            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
-            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size,
+                                                                    self.dataset_file_extension, train_rois)
+            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size,
+                                                                  self.dataset_file_extension, val_rois)
         else:
             logging.info(f'using random split')
-            self.train_loader, self.val_loader, _ = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
+            self.train_loader, self.val_loader, _ = build_distributed_loaders(self.dataset_path, self.batch_size,
+                                                                              self.dataset_file_extension)
         # Init model and optim
         self.model = build_distributed_model(self.model_name, gpu_id=local_rank)
         self.loss_fn = build_loss_fn(self.loss_name)
@@ -87,7 +92,7 @@ class DistributedTrainer(Trainer):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
-                training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
+                training_info = {**training_info, **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     # let all processes sync up before starting with a new epoch of validating
                     dist.barrier()
@@ -101,14 +106,15 @@ class DistributedTrainer(Trainer):
             self.scheduler.step()
         self._finish()
 
+
 if __name__ == '__main__':
     if not os.getenv('CUDA_VISIBLE_DEVICES'):
         raise ValueError(f'set the env: `CUDA_VISIBLE_DEVICES` first')
-    if not os.getenv('LOCAL_RANK'): 
+    if not os.getenv('LOCAL_RANK'):
         raise ValueError(f'set the env: `LOCAL_RANK` first')
     if not os.getenv('WANDB_GROUP'):
         raise ValueError(f'set the env: `WANDB_GROUP` first')
-    rank =  int(os.getenv('LOCAL_RANK'))
+    rank = int(os.getenv('LOCAL_RANK'))
     group = os.getenv('WANDB_GROUP')
     # Initialize wandb
     wandb.init(project='cloud removal V2', group=group, job_type='DDP mode')

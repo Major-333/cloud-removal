@@ -16,28 +16,29 @@ class FusionNet(nn.Module):
         self.middle_up = Up(512, 512)
         self.up5 = Up(1024, 512)
         self.up4 = Up(1024, 512)
-        self.up3 = Up(1024, 512)
-        self.up2 = Up(1024, 256)
-        self.up1 = Up(512, 128)
-        self.out_conv = OutConv(256, out_channels)
+        self.up3 = Up(1024, 256)
+        self.up2 = Up(512, 128)
+        self.up1 = Up(256, 64)
+        self.out_conv = OutConv(128, out_channels)
 
     def forward(self, simulation_image, concated_corrupted_sar_image):
         concated_simulation_corrupted_sar_image = torch.cat([simulation_image, concated_corrupted_sar_image], dim=1)
-        in_feature_map = self.inconv(concated_simulation_corrupted_sar_image)
+        in_feature_map = self.in_conv(concated_simulation_corrupted_sar_image)
         down_feature_map_1 = self.down1(in_feature_map)
         down_feature_map_2 = self.down2(down_feature_map_1)
         down_feature_map_3 = self.down3(down_feature_map_2)
         down_feature_map_4 = self.down4(down_feature_map_3)
         down_feature_map_5 = self.down5(down_feature_map_4)
         middle_conv_feature_map = self.middle_conv(down_feature_map_5)
-        middle_up_feature_map = self.middle_up(middle_conv_feature_map, middle_conv_feature_map)
-        up_feature_map_5 = self.up5(middle_up_feature_map, down_feature_map_5)
-        up_feature_map_4 = self.up4(up_feature_map_5, down_feature_map_4)
-        up_feature_map_3 = self.up3(up_feature_map_4, down_feature_map_3)
-        up_feature_map_2 = self.up2(up_feature_map_3, down_feature_map_2)
-        up_feature_map_1 = self.up1(up_feature_map_2, down_feature_map_1)
+        middle_up_feature_map = self.middle_up(middle_conv_feature_map, down_feature_map_5)
+        up_feature_map_5 = self.up5(middle_up_feature_map, down_feature_map_4)
+        up_feature_map_4 = self.up4(up_feature_map_5, down_feature_map_3)
+        up_feature_map_3 = self.up3(up_feature_map_4, down_feature_map_2)
+        up_feature_map_2 = self.up2(up_feature_map_3, down_feature_map_1)
+        up_feature_map_1 = self.up1(up_feature_map_2, in_feature_map)
         out_conv_feature_map = self.out_conv(up_feature_map_1)
-        return out_conv_feature_map
+        simulated_image = (out_conv_feature_map + 1) / 2 * 255
+        return simulated_image
 
 
 class InConv(nn.Module):

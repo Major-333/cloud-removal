@@ -92,6 +92,8 @@ class DistributedTrainer(Trainer):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
+                    if not (epoch_loss.item() > 0):
+                        logging.error(f'index:{index}')
                 training_info = {**training_info, **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     # let all processes sync up before starting with a new epoch of validating

@@ -17,7 +17,7 @@ from sen12ms_cr_dataset.build import build_distributed_loaders_with_rois, build_
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
 from evaluate import EvaluateType, Evaluater
-from utils import get_rois_from_split_file, increment_path, setup_seed
+from utils import get_rois_from_split_file, increment_path, setup_seed, config_logging, DEFAULT_LOG_FILENAME
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'Epoch'
@@ -62,7 +62,10 @@ class Trainer(object):
         self.best_val_psnr = 0
         self.best_val_ssim = 0
         # for save.
-        self.train_exp_dir = self._get_train_exp_dir()
+        self.train_exp_dir, _ = self._get_train_exp_dir()
+        # init logging
+        logging_file_path = os.path.join(self.train_exp_dir, DEFAULT_LOG_FILENAME)
+        config_logging(filename=logging_file_path)
 
     def _get_train_exp_dir(self) -> str:
         exp_dir = os.path.join(self.save_dir, TRAIN_SUBDIR_NAME, EXP_SUBDIR_NAME)
@@ -183,15 +186,6 @@ def run(group: str, gpus: List[int], checkpoint_relpath: Optional[str] = None):
         trainer.train()
     except Exception as e:
         logging.error(f'Falied in training:{str(e)}, traceback:{traceback.format_exc()}')
-
-
-def config_logging():
-    file_handler = logging.FileHandler(filename='train.log')
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    handlers = [file_handler, stdout_handler]
-    logging.basicConfig(level=logging.INFO,
-                        format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
-                        handlers=handlers)
 
 
 def get_args():

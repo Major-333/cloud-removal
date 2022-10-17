@@ -6,7 +6,7 @@ from glob import glob
 import numpy as np
 from numpy import array
 from torch.utils.data import Dataset
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
 # Geographic information systems use GeoTIFF and other formats to organize and store gridded raster datasets
 # such as satellite imagery and terrain models. Rasterio reads and writes these formats and provides a Python
 # API based on Numpy N-dimensional arrays and GeoJSON.
@@ -178,6 +178,13 @@ class SEN12MSCRTriplet(object):
         self._save_patch(s2_path, s2)
         self._save_patch(s2_cloudy_path, s2_cloudy)
 
+    def to_dict(self) -> Dict:
+        return {
+            'season': self.season.value,
+            'scene_id': self.scene_id,
+            'patch_id': self.patch_id
+        }
+
 class SEN12MSCRDataset(Dataset):
     """ Generic data loading routines for the SEN12MS-CR dataset of corresponding Sentinel 1,
     Sentinel 2 and cloudy Sentinel 2 data.
@@ -204,6 +211,17 @@ class SEN12MSCRDataset(Dataset):
         self.file_extension = file_extension
         self.rois = rois
         self.triplets = self.get_all_triplets()
+        # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
+        self._hack()
+
+    def _hack(self):
+        new_triplets = []
+        for triplet in self.triplets:
+            # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
+            if triplet.season == Season.SUMMER and int(triplet.scene_id) == 146 and int(triplet.patch_id) == 202:
+                continue
+            new_triplets.append(triplet)
+        self.triplets = new_triplets
 
     @property
     def filter_by_roi(self) -> bool:
@@ -440,3 +458,13 @@ if __name__ == "__main__":
         scene_cnt += len(ids)
     print(f'Scenes Total Count is:{scene_cnt}')
     print("Time Taken {}s".format(time.time() - start))
+    debug_infos = {'season': ['ROIs1868_summer', 'ROIs1970_fall', 'ROIs2017_winter', 'ROIs1158_spring', 'ROIs1158_spring', 'ROIs1158_spring'], 'scene_id': [146,  77, 108, 117, 142,  45], 'patch_id': [202, 673, 457, 834, 829, 402]}
+    for index in range(6):
+        season_value = debug_infos['season'][index]
+        scene_id = debug_infos['scene_id'][index]
+        p_id = debug_infos['patch_id'][index]
+        t = SEN12MSCRTriplet('/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data_v2/PROCESSED_SEN12MS_CR/', Season(season_value), scene_id, p_id, 'npy')
+        s1, s2, s2cloudy = t.data
+        print(f's1:{np.sum(np.isnan(s1))}')
+        print(f's2:{np.sum(np.isnan(s2))}')
+        print(f's2cloudy:{np.sum(np.isnan(s2cloudy))}')

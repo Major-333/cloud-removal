@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, Tuple, List
 import os
 import sys
@@ -8,6 +9,8 @@ from torch import nn
 import numpy as np
 import random
 from sen12ms_cr_dataset.dataset import Roi, Season
+
+DEFAULT_LOG_FILENAME = 'train.log'
 
 def init_weights(m: nn.Module):
     if isinstance(m, nn.Conv2d):
@@ -33,13 +36,15 @@ def increment_path(dir_path: str, sep='') -> str:
             return next_dir_path
     return None
 
-def config_logging():
-    file_handler = logging.FileHandler(filename='train.log')
+def config_logging(filename:str=DEFAULT_LOG_FILENAME):
+    file_handler = logging.FileHandler(filename=filename)
     stdout_handler = logging.StreamHandler(sys.stdout)
     handlers = [file_handler, stdout_handler]
     logging.basicConfig(level=logging.INFO,
                         format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
-                        handlers=handlers)
+                        handlers=handlers,
+                        force=True)
+    logging.info(f'start logging:{datetime.now()}')
 
 def setup_seed(seed: int):
     torch.manual_seed(seed)

@@ -9,7 +9,7 @@ export CUDA_VISIBLE_DEVICES="0,1,2,3,4,5"
 export TORCH_DISTRIBUTED_DEBUG="DETAIL"
 # master address
 export MASTER_ADDR="localhost"
-export MASTER_PORT="12356"
+export MASTER_PORT="12355"
 # wandb group name
 export WANDB_GROUP=$(date "+%Y%m%dT%H%M%S")
 

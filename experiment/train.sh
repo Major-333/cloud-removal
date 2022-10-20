@@ -9,7 +9,7 @@ export CUDA_VISIBLE_DEVICES="6, 7"
 export TORCH_DISTRIBUTED_DEBUG="DETAIL"
 # master address
 export MASTER_ADDR="localhost"
-export MASTER_PORT="9999"
+export MASTER_PORT="9998"
 # wandb group name
 export WANDB_GROUP=$(date "+%Y%m%dT%H%M%S")
 
@@ -20,4 +20,4 @@ python -m torch.distributed.launch \
     --node_rank=$NODE_RANK \
     --master_addr=$MASTER_ADDR \
     --master_port=$MASTER_PORT \
-    --use_env distributed_train.py
+    --use_env gan_train.py

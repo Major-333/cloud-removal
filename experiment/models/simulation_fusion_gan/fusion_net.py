@@ -22,7 +22,7 @@ class FusionNet(nn.Module):
         self.out_conv = OutConv(128, out_channels)
 
     def forward(self, simulation_image, concated_corrupted_sar_image):
-        concated_simulation_corrupted_sar_image = torch.cat([simulation_image, concated_corrupted_sar_image], dim=1)
+        concated_simulation_corrupted_sar_image = torch.cat((simulation_image, concated_corrupted_sar_image), dim=1)
         in_feature_map = self.in_conv(concated_simulation_corrupted_sar_image)
         down_feature_map_1 = self.down1(in_feature_map)
         down_feature_map_2 = self.down2(down_feature_map_1)

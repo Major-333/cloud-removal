@@ -16,6 +16,8 @@ from models.TSOCR_V2m import TSOCR_V2m
 from models.TSOCR_V3 import TSOCR_V3
 from models.test_model import TestModel
 from models.simulation_fusion_gan.simulation_net import SimulationNet
+from models.simulation_fusion_gan.fusion_net import FusionNet
+from models.simulation_fusion_gan.discriminative_net import DiscriminativeNet
 
 
 def _init_dsen2cr() -> nn.Module:
@@ -26,6 +28,18 @@ def _init_dsen2cr() -> nn.Module:
 
 def _init_simulation_net() -> nn.Module:
     model = SimulationNet(in_channels=2, out_channels=13)
+    model = model.cuda()
+    return model
+
+
+def _init_fusion_net() -> nn.Module:
+    model = FusionNet(in_channels=28, out_channels=13)
+    model = model.cuda()
+    return model
+
+
+def _init_discriminative_net() -> nn.Module:
+    model = DiscriminativeNet(in_channels=15)
     model = model.cuda()
     return model
 
@@ -83,6 +97,8 @@ MODEL_MAPPER = {
     'Restormer': _init_restormer,
     'DSen2CR': _init_dsen2cr,
     'SimulationNet': _init_simulation_net,
+    'FusionNet': _init_fusion_net,
+    'DiscriminativeNet': _init_discriminative_net,
     'Test': _init_test_model,
     'TSOCR_V0': _init_restormer,
     'TSOCR_V0.5': _init_test_model,
@@ -100,10 +116,22 @@ def build_model_with_dp(model_name: str, gpu_list: List[int]) -> nn.Module:
     return DP(model, device_ids=gpu_list)
 
 
+def build_pretrained_model_with_ddp(model_name: str, checkpoint_path: str, gpu_id: int) -> nn.Module:
+    model = build_pretrained_model(model_name, checkpoint_path)
+    logging.info(f'===== using gpu:{gpu_id} =====')
+    return DDP(model, device_ids=[gpu_id])
+
+
 def build_distributed_model(model_name: str, gpu_id: int) -> nn.Module:
     model = build_model(model_name)
     logging.info(f'===== using gpu:{gpu_id} =====')
     return DDP(model, device_ids=[gpu_id])
+
+
+def build_distributed_gan_model(model_name: str, gpu_id: int) -> nn.Module:
+    model = build_model(model_name)
+    logging.info(f'===== using gpu:{gpu_id} =====')
+    return DDP(model, device_ids=[gpu_id], broadcast_buffers=False)
 
 
 def build_pretrianed_model_with_dp(model_name: str, checkpoint_path: str, gpu_list: List[int]) -> nn.Module:

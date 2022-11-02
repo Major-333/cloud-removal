@@ -73,8 +73,9 @@ class Trainer(object):
         # save metadata info
         config_path = os.path.join(exp_dir, CONFIG_FILENAME)
         shutil.copyfile(CONFIG_FILENAME, config_path)
-        split_file_path = os.path.join(exp_dir, DEFAULT_SPLIT_FILENAME)
-        shutil.copyfile(self.split_file_path, split_file_path)
+        if self.split_file_path:
+            split_file_path = os.path.join(exp_dir, DEFAULT_SPLIT_FILENAME)
+            shutil.copyfile(self.split_file_path, split_file_path)
         return exp_dir
 
     def _parse_config(self, config: Dict):
@@ -89,7 +90,10 @@ class Trainer(object):
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
         self.seed = config['seed']
-        self.split_file_path = config['split_file_path']
+        if 'split_file_path' in config.keys():
+            self.split_file_path = config['split_file_path']
+        else:
+            self.split_file_path = None
 
     def _get_optimizer(self, model: nn.Module) -> Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr)

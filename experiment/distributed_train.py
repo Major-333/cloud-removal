@@ -33,9 +33,14 @@ class DistributedTrainer(Trainer):
         self.local_rank = local_rank
         torch.cuda.set_device(f'cuda:{local_rank}')
         # Init dataloader
-        train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
-        self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
-        self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        if self.split_file_path:
+            logging.info(f'use spit file:{self.split_file_path}')
+            train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
+            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
+            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        else:
+            logging.info(f'using random split')
+            self.train_loader, self.val_loader, _ = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
         # Init model and optim
         self.model = build_distributed_model(self.model_name, gpu_id=local_rank)
         self.loss_fn = build_loss_fn(self.loss_name)
@@ -60,8 +65,6 @@ class DistributedTrainer(Trainer):
         logging_file_path = os.path.join(self.train_exp_dir, f'{DEFAULT_LOG_FILENAME}_{self.local_rank}')
         config_logging(filename=logging_file_path)
         logging.info(f'rank:{self.local_rank} Trainer has been initialized.')
-        # debug model
-        # wandb.watch(self.model, log_freq=100, log='all')
 
     @property
     def is_master(self) -> bool:
@@ -84,14 +87,13 @@ class DistributedTrainer(Trainer):
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss
-                    if not (epoch_loss.item() > 0):
-                        logging.error(f'index:{index}')
                 training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     # let all processes sync up before starting with a new epoch of validating
                     dist.barrier()
                     metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
                     training_info = {**training_info, **metric}
+                    logging.info(f'metric:{metric}')
                     is_update = self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
                     if is_update and self.local_rank == 0:
                         self._save(self.model, epoch)

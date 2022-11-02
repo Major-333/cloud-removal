@@ -102,6 +102,18 @@ class SEN12MSCRTriplet(object):
         s2_cloudy = self._load(self.s2_cloudy_path(), S2Bands.ALL)
         return s1, s2, s2_cloudy
 
+    @property
+    def data_with_cloud_mask(self) -> Tuple[np.array, np.array, np.array, np.array]:
+        """ Returns a triplet of orresponding Sentinel 1,
+        Sentinel 2, cloudy Sentinel 2 data and cloud mask.
+        Array Shape is CHW.
+        """
+        s1 = self._load(self.s1_path(), S1Bands.ALL)
+        s2 = self._load(self.s2_path(), S2Bands.ALL)
+        s2_cloudy = self._load(self.s2_cloudy_path(), S2Bands.ALL)
+        cloud_mask = self._load(self.mask_path(), S2Bands.ALL)
+        return s1, s2, s2_cloudy, cloud_mask
+
     def s1_path(self, dataset_dir: str = None, file_extension: str = None) -> str:
         if not dataset_dir:
             dataset_dir = self.dataset_dir
@@ -130,6 +142,16 @@ class SEN12MSCRTriplet(object):
         season_dirname = f'{self.season.value}_s2_cloudy'
         scene_dirname = f's2_cloudy_{self.scene_id}'
         filename = f'{self.season.value}_s2_cloudy_{self.scene_id}_p{self.patch_id}.{file_extension}'
+        return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
+
+    def cloud_mask_path(self, dataset_dir: str = None, file_extension: str = None):
+        if not dataset_dir:
+            dataset_dir = self.dataset_dir
+        if not file_extension:
+            file_extension = self.file_extension
+        season_dirname = f'{self.season.value}_cloud_mask'
+        scene_dirname = f'cloud_mask_{self.scene_id}'
+        filename = f'{self.season.value}_cloud_mask_{self.scene_id}_p{self.patch_id}.{file_extension}'
         return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
 
     def _load(self, path: str, band: Union[S1Bands, S2Bands]) -> np.array:
@@ -177,6 +199,19 @@ class SEN12MSCRTriplet(object):
         self._save_patch(s1_path, s1)
         self._save_patch(s2_path, s2)
         self._save_patch(s2_cloudy_path, s2_cloudy)
+
+    def save_with_cloudy_mask(self, dataset_dir: str, data: Tuple[np.array, np.array, np.array, np.array] = None) -> None:
+        if not data:
+            data = self.data_with_cloud_mask
+        s1, s2, s2_cloudy, cloud_mask = data
+        s1_path = self.s1_path(dataset_dir, file_extension='npy')
+        s2_path = self.s2_path(dataset_dir, file_extension='npy')
+        s2_cloudy_path = self.s2_cloudy_path(dataset_dir, file_extension='npy')
+        cloud_mask_path = self.cloud_mask_path(dataset_dir, file_extension='npy')
+        self._save_patch(s1_path, s1)
+        self._save_patch(s2_path, s2)
+        self._save_patch(s2_cloudy_path, s2_cloudy)
+        self._save_patch(cloud_mask_path, cloud_mask)
 
     def to_dict(self) -> Dict:
         return {

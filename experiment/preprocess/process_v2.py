@@ -99,9 +99,9 @@ if __name__ == '__main__':
                         datefmt='%Y-%m-%d %H:%M:%S',
                         format='%(asctime)s %(levelname)-8s %(message)s')
     base_dir = '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data_v2/SEN12MS_CR'
-    processed_dir = '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data_v2/PROCESSED_SEN12MS_CR_V3'
+    processed_dir = '/home/major333@corp.sse.tongji.edu.cn/workspace/remote-sensing/data_v2/PROCESSED_SEN12MS_CR_V4'
     # preprocess = Preprocess(base_dir, processed_dir, crop_size=128, raw_size=256, use_cloud_mask=True, cloud_threshold=0.2)
-    preprocess = Preprocess(base_dir, processed_dir, crop_size=128, raw_size=256, use_cloud_mask=False)
+    preprocess = Preprocess(base_dir, processed_dir, crop_size=128, raw_size=256, use_cloud_mask=True)
 
     # needs 4 min
     preprocess.run()

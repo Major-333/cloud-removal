@@ -235,7 +235,7 @@ class SEN12MSCRDataset(Dataset):
     Note: The order in which you request the bands is the same order they will be returned in.
     """
 
-    def __init__(self, base_dir, file_extension: str = 'tif', rois: List[Roi] = None):
+    def __init__(self, base_dir, file_extension: str = 'tif', rois: List[Roi] = None, use_cloud_mask: bool=False):
         self.base_dir = base_dir
         if not os.path.exists(self.base_dir):
             raise Exception(f'SEN12MSCRDataset faled to init. base_dir:{base_dir} does not exist')
@@ -246,6 +246,7 @@ class SEN12MSCRDataset(Dataset):
         self.file_extension = file_extension
         self.rois = rois
         self.triplets = self.get_all_triplets()
+        self.use_cloud_mask = use_cloud_mask
         # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
         self._hack()
 
@@ -415,9 +416,14 @@ class SEN12MSCRDataset(Dataset):
 
     def __getitem__(self, index):
         triplet = self.triplets[index]
-        s1, s2, s2_cloudy = triplet.data
-        s1, s2, s2_cloudy = np.float32(s1), np.float32(s2), np.float32(s2_cloudy)
-        return np.concatenate((s1, s2_cloudy), axis=0), s2
+        if self.use_cloud_mask:
+            s1, s2, s2_cloudy = triplet.data
+            s1, s2, s2_cloudy = np.float32(s1), np.float32(s2), np.float32(s2_cloudy)
+            return np.concatenate((s1, s2_cloudy), axis=0), s2
+        else:
+            s1, s2, s2_cloudy, cloud_mask = triplet.data_with_cloud_mask
+            s1, s2, s2_cloudy, cloud_mask = np.float32(s1), np.float32(s2), np.float32(s2_cloudy), np.float32(cloud_mask)
+            return np.concatenate((s1, s2_cloudy), axis=0), s2, cloud_mask
 
 
 if __name__ == "__main__":

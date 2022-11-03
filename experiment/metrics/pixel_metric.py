@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 
 
-def get_psnr(img1: tensor, img2: tensor, maxi: float = 255.0): 
+def get_psnr(img1: tensor, img2: tensor, maxi: float = 1.0): 
     rmse = get_rmse(img1, img2)
     return 20 * torch.log10(maxi / rmse)
 

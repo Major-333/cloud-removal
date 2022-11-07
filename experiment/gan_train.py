@@ -6,6 +6,7 @@ from tqdm import tqdm
 from typing import Dict, Optional
 import torch
 from torch.optim import Optimizer
+from models.simulation_fusion_gan.simulation_net import MyColorJitter
 from warmup_scheduler import GradualWarmupScheduler
 from torch import nn, distributed, optim
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ from models.build import build_distributed_gan_model, build_pretrained_model_wit
 from loss.build import build_loss_fn
 from evaluate import EvaluateType, Evaluater
 from utils import get_rois_from_split_file, increment_path, setup_seed
+from loss.simulation_fusion_gan_loss import SimulationFusionGANLoss
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'Epoch'
@@ -29,16 +31,16 @@ DEFAULT_SPLIT_FILENAME = 'split.yaml'
 class GANTrainer(object):
 
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
-        # Load config to trainer
-        self._parse_config(config)
-        self.config = config
-        # Fix random seed for reproducibility
-        setup_seed(self.seed)
         # initialize PyTorch distributed using environment variables (you could also do this more explicitly by specifying `rank` and `world_size`,
         #  but I find using environment variables makes it so that you can easily use the same script on different machines)
         distributed.init_process_group(backend='nccl', init_method='env://')
         self.local_rank = local_rank
         torch.cuda.set_device(f'cuda:{local_rank}')
+        # Load config to trainer
+        self._parse_config(config)
+        self.config = config
+        # Fix random seed for reproducibility
+        setup_seed(self.seed)
         # Init dataloader
         train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
         self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size,
@@ -47,14 +49,16 @@ class GANTrainer(object):
                                                               self.dataset_file_extension, val_rois)
         # Init model and optim
         self.model_S = build_pretrained_model_with_ddp(self.model_name_S, self.checkpoint_path_S, gpu_id=local_rank)
+        self.transform_S = MyColorJitter()
+
         self.model_G = build_distributed_gan_model(self.model_name_G, gpu_id=local_rank)
-        self.loss_fn_G = build_loss_fn(self.loss_name_G)
-        self.optimizer_G = self._get_optimizer(self.model_G)
+        self.loss_fn_G = SimulationFusionGANLoss(local_rank=local_rank)
+        self.optimizer_G = self._get_optimizer(self.model_G, 2e-4)
         self.scheduler_G = self._get_scheduler(self.optimizer_G)
 
         self.model_D = build_distributed_gan_model(self.model_name_D, gpu_id=local_rank)
         self.loss_fn_D = build_loss_fn(self.loss_name_D)
-        self.optimizer_D = self._get_optimizer(self.model_D)
+        self.optimizer_D = self._get_optimizer(self.model_D, 2e-6)
         self.scheduler_D = self._get_scheduler(self.optimizer_D)
 
         # for model resume
@@ -68,19 +72,20 @@ class GANTrainer(object):
         if self.local_rank == 0:
             self.train_exp_dir = self._get_train_exp_dir()
 
-    def _get_optimizer(self, model: nn.Module) -> Optimizer:
-        return torch.optim.Adam(model.parameters(), lr=self.lr)
+    def _get_optimizer(self, model: nn.Module, lr) -> Optimizer:
+        return torch.optim.Adam(model.parameters(), lr=lr)
 
     def _get_scheduler(self, optimizer: Optimizer) -> object:
-        min_lr, total_epochs = self.min_lr, self.max_epoch
-        warmup_epochs = 3
-        # 3-500 完成一次余弦
-        scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, 30, eta_min=min_lr)
-        # 3 warmup
-        scheduler = GradualWarmupScheduler(optimizer,
-                                           multiplier=1,
-                                           total_epoch=warmup_epochs,
-                                           after_scheduler=scheduler_cosine)
+        # min_lr, total_epochs = self.min_lr, self.max_epoch
+        # warmup_epochs = 3
+        # # 3-500 完成一次余弦
+        # scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, 30, eta_min=min_lr)
+        # # 3 warmup
+        # scheduler = GradualWarmupScheduler(optimizer,
+        #                                    multiplier=1,
+        #                                    total_epoch=warmup_epochs,
+        #                                    after_scheduler=scheduler_cosine)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         return scheduler
 
     def _get_train_exp_dir(self) -> str:
@@ -132,6 +137,7 @@ class GANTrainer(object):
             epoch_loss_G = 0.0
             epoch_loss_L1 = 0.0
             epoch_loss_GAN = 0.0
+            epoch_loss_perceptual = 0.0
             epoch_loss_D = 0.0
             training_info = {
                 'learning rate G': self.optimizer_G.param_groups[0]['lr'],
@@ -143,40 +149,54 @@ class GANTrainer(object):
                 for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
                     cloudy, ground_truth = data_batch
                     cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
+
                     sar_image = cloudy[:, :2, :, :]
-                    simulated_image = self.model_S(cloudy)
+                    simulated_image = self.transform_S(self.model_S(cloudy))
+                    cloudy = (cloudy - 127.5) / 127.5
+                    ground_truth = (ground_truth - 127.5) / 127.5
+                    sar_image = (sar_image - 127.5) / 127.5
                     fused_image = self.model_G(simulated_image.detach(), cloudy)
+
+                    # backward_D
                     self.set_requires_grad(self.model_D, True)
                     self.optimizer_D.zero_grad()
-                    # backward_D
+
                     fake_concated_optical_sar_image = torch.cat((fused_image, sar_image), dim=1)
                     pred_fake = self.model_D(fake_concated_optical_sar_image.detach())
                     loss_D_fake = self.loss_fn_D(pred_fake, torch.zeros(pred_fake.shape).cuda())
+
                     real_concated_optical_sar_image = torch.cat((ground_truth, sar_image), dim=1)
                     pred_real = self.model_D(real_concated_optical_sar_image)
                     loss_D_real = self.loss_fn_D(pred_real, torch.ones(pred_real.shape).cuda())
+
                     loss_D = (loss_D_fake + loss_D_real) / 2
                     loss_D.backward()
                     self.optimizer_D.step()
-                    epoch_loss_D += loss_D
+                    epoch_loss_D += loss_D.item()
+
+                    # backward_G
                     self.set_requires_grad(self.model_D, False)
                     self.optimizer_G.zero_grad()
-                    # backward_G
+
                     fake_concated_optical_sar_image = torch.cat((fused_image, sar_image), dim=1)
                     pred_fake = self.model_D(fake_concated_optical_sar_image)
-                    loss_G, loss_L1, loss_GAN = self.loss_fn_G(pred_fake, fused_image, ground_truth)
+                    loss_G, loss_L1, loss_GAN, loss_perceptual = self.loss_fn_G(pred_fake, fused_image, ground_truth)
+
                     loss_G.backward()
                     self.optimizer_G.step()
-                    epoch_loss_G += loss_G
-                    epoch_loss_L1 += loss_L1
-                    epoch_loss_GAN += loss_GAN
+                    epoch_loss_G += loss_G.item()
+                    epoch_loss_L1 += loss_L1.item()
+                    epoch_loss_GAN += loss_GAN.item()
+                    epoch_loss_perceptual += loss_perceptual.item()
+
                 training_info = {
                     **training_info,
                     **{
-                        'epoch_loss_G': epoch_loss_G.item() / len(self.train_loader),
-                        'epoch_loss_L1': epoch_loss_L1.item() / len(self.train_loader),
-                        'epoch_loss_GAN': epoch_loss_GAN.item() / len(self.train_loader),
-                        'epoch_loss_D': epoch_loss_D.item() / len(self.train_loader)
+                        'epoch_loss_G': epoch_loss_G / len(self.train_loader),
+                        'epoch_loss_L1': epoch_loss_L1 / len(self.train_loader),
+                        'epoch_loss_GAN': epoch_loss_GAN / len(self.train_loader),
+                        'epoch_loss_perceptual': epoch_loss_perceptual / len(self.train_loader),
+                        'epoch_loss_D': epoch_loss_D / len(self.train_loader)
                     }
                 }
                 if epoch % self.validate_every == 0:
@@ -188,8 +208,9 @@ class GANTrainer(object):
                     if is_update and self.local_rank == 0:
                         self._save(self.model_G, self.model_D, epoch)
             self._logs(training_info)
-            self.scheduler_G.step()
-            self.scheduler_D.step()
+            if epoch >= 75:
+                self.scheduler_G.step()
+                self.scheduler_D.step()
         self._finish()
 
     def set_requires_grad(self, nets, requires_grad=False):

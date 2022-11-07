@@ -37,7 +37,7 @@ class FusionNet(nn.Module):
         up_feature_map_2 = self.up2(up_feature_map_3, down_feature_map_1)
         up_feature_map_1 = self.up1(up_feature_map_2, in_feature_map)
         out_conv_feature_map = self.out_conv(up_feature_map_1)
-        simulated_image = (out_conv_feature_map + 1) / 2 * 255
+        simulated_image = out_conv_feature_map
         return simulated_image
 
 

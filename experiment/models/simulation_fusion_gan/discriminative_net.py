@@ -23,7 +23,7 @@ class Down(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(Down, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False)
-        self.batch_norm = nn.BatchNorm2d(out_channels)
+        self.batch_norm = nn.BatchNorm2d(out_channels, track_running_stats=False)
         self.leakey_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, last_feature_map):

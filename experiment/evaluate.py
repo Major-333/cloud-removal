@@ -33,8 +33,10 @@ class Evaluater(object):
         for _, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {eval_type} round')):
             cloudy, ground_truth = data_batch
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
+            cloudy = (cloudy - 127.5) / 127.5
             with torch.no_grad():
                 output = model(cloudy)
+                output = (output + 1) * 127.5
                 output[output < 0] = 0
                 output[output > 255] = 255
                 total_rmse += get_rmse(output, ground_truth).item()
@@ -63,7 +65,9 @@ class Evaluater(object):
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():
                 simulated_image = model_S(cloudy)
+                cloudy = (cloudy - 127.5) / 127.5
                 output = model_G(simulated_image, cloudy)
+                output = (output + 1) * 127.5
                 output[output < 0] = 0
                 output[output > 255] = 255
                 total_rmse += get_rmse(output, ground_truth).item()

@@ -37,7 +37,7 @@ class SimulationNet(nn.Module):
         up_feature_map_2 = self.up2(up_feature_map_3, down_feature_map_1)
         up_feature_map_1 = self.up1(up_feature_map_2, in_feature_map)
         out_conv_feature_map = self.out_conv(up_feature_map_1)
-        simulated_image = (out_conv_feature_map + 1) / 2 * 255
+        simulated_image = out_conv_feature_map
         return simulated_image
 
 
@@ -119,3 +119,30 @@ class OutConv(nn.Module):
         out_conv_feature_map = self.conv_transpose(last_feature_map)
         out_conv_feature_map = self.tanh(out_conv_feature_map)
         return out_conv_feature_map
+
+
+class MyColorJitter(nn.Module):
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(self, img):
+        img = (img + 1) / 2
+        img = self.adjust_brightness(img)
+        img = self.adjust_contrast(img)
+        img = img * 2 - 1
+        return img
+
+    def adjust_brightness(self, img):
+        factor = float(torch.empty(1).uniform_(0.5, 1.5))
+        return self.blend(img, torch.zeros_like(img), factor)
+
+    def adjust_contrast(self, img):
+        factor = float(torch.empty(1).uniform_(0.5, 1.5))
+        mean = torch.mean(img, dim=(-3, -2, -1), keepdim=True)
+        return self.blend(img, mean, factor)
+
+    def blend(self, img1, img2, ratio):
+        ratio = float(ratio)
+        bound = 1.0
+        return (ratio * img1 + (1.0 - ratio) * img2).clamp(0, bound).to(img1.dtype)

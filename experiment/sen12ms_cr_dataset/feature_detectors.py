@@ -2,7 +2,6 @@ import numpy as np
 import scipy
 import scipy.signal as scisig
 
-
 # naming conventions:
 # ['QA60', 'B1','B2',    'B3',    'B4',   'B5','B6','B7', 'B8','  B8A', 'B9',          'B10', 'B11','B12']
 # ['QA60','cb', 'blue', 'green', 'red', 're1','re2','re3','nir', 'nir2', 'waterVapor', 'cirrus','swir1', 'swir2'])
@@ -11,6 +10,7 @@ import scipy.signal as scisig
 # [              BB      BG       BR                       BNIR                                  BSWIR1    BSWIR2
 
 # ge. Bands 1, 2, 3, 8, 11, and 12 were utilized as BB , BG , BR , BNIR , BSWIR1 , and BSWIR2, respectively.
+
 
 def get_rescaled_data(data, limits):
     return (data - limits[0]) / (limits[1] - limits[0])
@@ -25,7 +25,7 @@ def get_normalized_difference(channel1, channel2):
 
 def get_shadow_mask(data_image):
     # get data between 0 and 1
-    data_image = data_image / 10000.
+    data_image = data_image / 255.
 
     (ch, r, c) = data_image.shape
     shadow_mask = np.zeros((r, c)).astype('float32')
@@ -51,7 +51,7 @@ def get_shadow_mask(data_image):
 
 
 def get_cloud_mask(data_image, cloud_threshold, binarize=False, use_moist_check=False):
-    data_image = data_image / 10000.
+    data_image = data_image / 255.
     (ch, r, c) = data_image.shape
 
     # Cloud until proven otherwise
@@ -73,7 +73,7 @@ def get_cloud_mask(data_image, cloud_threshold, binarize=False, use_moist_check=
     score = np.minimum(score, get_rescaled_data(ndsi, [0.8, 0.6]))
 
     box_size = 7
-    box = np.ones((box_size, box_size)) / (box_size ** 2)
+    box = np.ones((box_size, box_size)) / (box_size**2)
     score = scipy.ndimage.morphology.grey_closing(score, size=(5, 5))
     score = scisig.convolve2d(score, box, mode='same')
 

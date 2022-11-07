@@ -7,7 +7,7 @@ LOSS_MAPPER = {
     'SE': torch.nn.MSELoss(reduction='sum'),
     'CharbonnierLoss': CharbonnierLoss(),
     'L1Loss': torch.nn.L1Loss(),
-    'SimulationFusionGANLoss': SimulationFusionGANLoss()
+    # 'SimulationFusionGANLoss': SimulationFusionGANLoss()
 }
 
 

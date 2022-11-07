@@ -12,6 +12,7 @@ from sen12ms_cr_dataset.dataset import Roi, Season
 
 DEFAULT_LOG_FILENAME = 'train.log'
 
+
 def init_weights(m: nn.Module):
     if isinstance(m, nn.Conv2d):
         torch.nn.init.xavier_uniform_(m.weight)
@@ -25,6 +26,7 @@ def parse_wandb_yaml(yaml_path: str) -> Dict:
         config[key] = raw_config[key]['value']
     return config
 
+
 def increment_path(dir_path: str, sep='') -> str:
     # Increment file or directory path, i.e. runs/exp --> runs/exp{sep}2, runs/exp{sep}3, ... etc.
     if not os.path.exists(dir_path):
@@ -36,7 +38,8 @@ def increment_path(dir_path: str, sep='') -> str:
             return next_dir_path
     return None
 
-def config_logging(filename:str=DEFAULT_LOG_FILENAME):
+
+def config_logging(filename: str = DEFAULT_LOG_FILENAME):
     file_handler = logging.FileHandler(filename=filename)
     stdout_handler = logging.StreamHandler(sys.stdout)
     handlers = [file_handler, stdout_handler]
@@ -46,6 +49,7 @@ def config_logging(filename:str=DEFAULT_LOG_FILENAME):
                         force=True)
     logging.info(f'start logging:{datetime.now()}')
 
+
 def setup_seed(seed: int):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -53,13 +57,16 @@ def setup_seed(seed: int):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
 
+
 def roi_to_str(roi: Roi) -> str:
     return f'{roi.season.value}_{roi.scene_id}'
+
 
 def str_to_roi(roi_str: str) -> Roi:
     scene_id = roi_str.rsplit('_', 1)[-1]
     season = Season(roi_str.rsplit('_', 1)[0])
     return Roi(season, scene_id)
+
 
 def get_rois_from_split_file(split_file_path: str) -> Tuple[List[Roi], List[Roi], List[Roi]]:
     if not os.path.isfile(split_file_path):

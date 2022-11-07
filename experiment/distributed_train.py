@@ -86,9 +86,11 @@ class DistributedTrainer(Trainer):
                 for index, data_batch in enumerate(tqdm(self.train_loader, desc='Epoch: {}'.format(epoch))):
                     self.optimizer.zero_grad()
                     cloudy, ground_truth = data_batch
+                    cloudy = (cloudy - 127.5) / 127.5
+                    ground_truth = (ground_truth - 127.5) / 127.5
                     cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
                     output = self.model(cloudy)
-                    loss = self.loss_fn(output, ground_truth)
+                    loss = self.loss_fn(output, ground_truth) / 2
                     loss.backward()
                     self.optimizer.step()
                     epoch_loss += loss

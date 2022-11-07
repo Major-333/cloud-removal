@@ -5,11 +5,11 @@ export NUM_NODES=1
 export NUM_GPUS_PER_NODE=2
 export NODE_RANK=0
 export WORLD_SIZE=$(($NUM_NODES * $NUM_GPUS_PER_NODE))
-export CUDA_VISIBLE_DEVICES="6, 7"
+export CUDA_VISIBLE_DEVICES="6,7"
 export TORCH_DISTRIBUTED_DEBUG="DETAIL"
 # master address
 export MASTER_ADDR="localhost"
-export MASTER_PORT="9998"
+export MASTER_PORT="9996"
 # wandb group name
 export WANDB_GROUP=$(date "+%Y%m%dT%H%M%S")
 

@@ -4,13 +4,15 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 
 
-def build_distributed_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi]) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def build_distributed_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str,
+                                        rois: List[Roi]) -> Tuple[DataLoader, DataLoader, DataLoader]:
     dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois)
     data_sampler = DistributedSampler(dataset)
     return DataLoader(dataset, batch_size=batch_size, num_workers=4, pin_memory=True, sampler=data_sampler)
 
 
-def build_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi]) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def build_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str,
+                            rois: List[Roi]) -> Tuple[DataLoader, DataLoader, DataLoader]:
     dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois)
     return DataLoader(dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
 
@@ -29,7 +31,8 @@ def build_loaders(dataset_path: str, batch_size: int, file_extension: str) -> Tu
     return train_loader, val_loader, test_loader
 
 
-def build_distributed_loaders(dataset_path: str, batch_size: int, file_extension: str) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def build_distributed_loaders(dataset_path: str, batch_size: int,
+                              file_extension: str) -> Tuple[DataLoader, DataLoader, DataLoader]:
     dataset = SEN12MSCRDataset(dataset_path, file_extension)
     n_train = int(len(dataset) * 0.6)
     n_test = int(len(dataset) * 0.2)

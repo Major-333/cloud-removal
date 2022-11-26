@@ -34,10 +34,10 @@ class Evaluater(object):
             with torch.no_grad():
                 output = model(cloudy)
                 output[output < 0] = 0
-                output[output > 255] = 255
+                output[output > 1] = 1
                 total_rmse += get_rmse(output, ground_truth).item()
                 total_psnr += get_psnr(output, ground_truth).item()
-                total_ssim += ssim(output, ground_truth, data_range=255.).item()
+                total_ssim += ssim(output, ground_truth, data_range=1.0).item()
                 total_sam += get_sam(ground_truth, output).item()
                 total_mae += get_mae(ground_truth, output).item()
         return {

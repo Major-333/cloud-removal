@@ -32,12 +32,24 @@ class DistributedTrainer(Trainer):
         dist.init_process_group(backend='nccl', init_method='env://')
         self.local_rank = local_rank
         torch.cuda.set_device(f'cuda:{local_rank}')
+        # for save.
+        if self.is_master:
+            self.train_exp_dir = self._get_train_exp_dir()
+            dist.broadcast_object_list([self.train_exp_dir])
+        else:
+            broadcast_msg = [None]
+            dist.broadcast_object_list(broadcast_msg, src=0)
+            self.train_exp_dir = broadcast_msg[0]
+        # init logging
+        logging_file_path = os.path.join(self.train_exp_dir, f'{DEFAULT_LOG_FILENAME}_{self.local_rank}')
+        config_logging(filename=logging_file_path)
+        logging.info(f'rank:{self.local_rank} Trainer has been initialized.')
         # Init dataloader
         if self.split_file_path:
             logging.info(f'use spit file:{self.split_file_path}')
             train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
-            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
-            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois, debug=self.debug)
+            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois, debug=self.debug)
         else:
             logging.info(f'using random split')
             self.train_loader, self.val_loader, _ = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)
@@ -53,18 +65,7 @@ class DistributedTrainer(Trainer):
         # for summary
         self.best_val_psnr = 0
         self.best_val_ssim = 0
-        # for save.
-        if self.is_master:
-            self.train_exp_dir = self._get_train_exp_dir()
-            dist.broadcast_object_list([self.train_exp_dir])
-        else:
-            broadcast_msg = [None]
-            dist.broadcast_object_list(broadcast_msg, src=0)
-            self.train_exp_dir = broadcast_msg[0]
-        # init logging
-        logging_file_path = os.path.join(self.train_exp_dir, f'{DEFAULT_LOG_FILENAME}_{self.local_rank}')
-        config_logging(filename=logging_file_path)
-        logging.info(f'rank:{self.local_rank} Trainer has been initialized.')
+
 
     @property
     def is_master(self) -> bool:

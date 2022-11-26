@@ -33,7 +33,7 @@ class CrossAttention(nn.Module):
 
 
     def forward(self, sar, ms):
-        b,c,h,w = ms.shape
+        _, _,h,w = ms.shape
 
         ms_q, ms_k, ms_v = self.ms_qkv_dwconv(self.ms_qkv(ms)).chunk(3, dim=1)     
         
@@ -81,7 +81,58 @@ class CrossAttention(nn.Module):
 
         return sar_out, ms_out
 
+class CrossAttentionOnlyMS(nn.Module):
+    def __init__(self, dim, num_heads, bias):
+        super(CrossAttentionOnlyMS, self).__init__()
+        self.num_heads = num_heads
+        self.ms_temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+        self.ms_qkv = nn.Conv2d(dim, dim*3, kernel_size=1, bias=bias)
+        self.ms_qkv_dwconv = nn.Conv2d(dim*3, dim*3, kernel_size=3, stride=1, padding=1, groups=dim*3, bias=bias)
 
+        self.sar_qv = nn.Conv2d(dim, dim*2, kernel_size=1, bias=bias)
+        # TODO: groups=dim*2
+        self.sar_qv_dwconv = nn.Conv2d(dim*2, dim*2, kernel_size=3, stride=1, padding=1, groups=dim*2, bias=bias)
+
+        self.ms_project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
+
+    def forward(self, sar, ms):
+        _, _, h,w = ms.shape
+
+        ms_q, ms_k, ms_v = self.ms_qkv_dwconv(self.ms_qkv(ms)).chunk(3, dim=1)     
+        
+        ms_q = rearrange(ms_q, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
+        ms_k = rearrange(ms_k, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
+        ms_v = rearrange(ms_v, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
+
+        ms_q = torch.nn.functional.normalize(ms_q, dim=-1)
+        ms_k = torch.nn.functional.normalize(ms_k, dim=-1)
+
+        sar_q, sar_v = self.sar_qv_dwconv(self.sar_qv(sar)).chunk(2, dim=1)     
+        
+        sar_q = rearrange(sar_q, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
+        sar_v = rearrange(sar_v, 'b (head c) h w -> b head c (h w)', head=self.num_heads)
+
+        sar_q = torch.nn.functional.normalize(sar_q, dim=-1)
+        sar_v = torch.nn.functional.normalize(sar_v, dim=-1)
+
+        ms_self_attn = (ms_q @ ms_k.transpose(-2, -1)) * self.ms_temperature
+        ms_self_attn = ms_self_attn.softmax(dim=-1)
+
+        ms_self_attn_out = (ms_self_attn @ ms_v)
+        
+        ms_self_attn_out = rearrange(ms_self_attn_out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=h, w=w)
+
+        cross_attn = (sar_q @ ms_k.transpose(-2, -1)) * self.ms_temperature
+        cross_attn = cross_attn.softmax(dim=-1)
+
+        cross_attn_out = (cross_attn @ sar_v)
+
+        cross_attn_out = rearrange(cross_attn_out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=h, w=w)
+
+        ms_out = self.ms_project_out(cross_attn_out + ms_self_attn_out)
+        ms_out = ms + ms_out # short cut
+
+        return ms_out
 
 ##########################################################################
 class TransformerFusionBlock(nn.Module):
@@ -101,6 +152,23 @@ class TransformerFusionBlock(nn.Module):
         sar, ms = self.attn(self.sar_norm1(sar), self.ms_norm1(ms))
 
         sar = sar + self.sar_ffn(self.sar_norm2(sar))
+        ms = ms + self.ms_ffn(self.ms_norm2(ms))
+
+        return (sar, ms)
+
+class LastTransformerFusionBlock(nn.Module):
+    def __init__(self, dim, num_heads, ffn_expansion_factor, bias, LayerNorm_type):
+        super(LastTransformerFusionBlock, self).__init__()
+        self.ms_norm1 = LayerNorm(dim, LayerNorm_type)
+        self.sar_norm1 = LayerNorm(dim, LayerNorm_type)
+        self.attn = CrossAttentionOnlyMS(dim, num_heads, bias)
+        self.ms_norm2 = LayerNorm(dim, LayerNorm_type)
+        self.ms_ffn = FeedForward(dim, ffn_expansion_factor, bias)
+
+    def forward(self, x):
+        sar, ms = x
+        ms = self.attn(self.sar_norm1(sar), self.ms_norm1(ms))
+
         ms = ms + self.ms_ffn(self.ms_norm2(ms))
 
         return (sar, ms)
@@ -135,7 +203,12 @@ class TSOCR_V2(nn.Module):
         self.ms_down3_4 = Downsample(int(dim*2**2)) ## From Level 3 to Level 4
         self.sar_down3_4 = Downsample(int(dim*2**2)) ## From Level 3 to Level 4
 
-        self.latent = nn.Sequential(*[TransformerFusionBlock(dim=int(dim*2**3), num_heads=heads[3], ffn_expansion_factor=ffn_expansion_factor, bias=bias, LayerNorm_type=LayerNorm_type) for i in range(num_blocks[3])])
+        self.latent = nn.Sequential(
+            *(
+                [TransformerFusionBlock(dim=int(dim*2**3), num_heads=heads[3], ffn_expansion_factor=ffn_expansion_factor, bias=bias, LayerNorm_type=LayerNorm_type) for i in range(num_blocks[3] - 1)]
+                + [LastTransformerFusionBlock(dim=int(dim*2**3), num_heads=heads[3], ffn_expansion_factor=ffn_expansion_factor, bias=bias, LayerNorm_type=LayerNorm_type)]
+            )
+        )
         
         self.up4_3 = Upsample(int(dim*2**3)) ## From Level 4 to Level 3
         self.reduce_chan_level3 = nn.Conv2d(int(dim*2**3), int(dim*2**2), kernel_size=1, bias=bias)

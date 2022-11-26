@@ -44,10 +44,15 @@ class Trainer(object):
         self.config = config
         # Fix random seed for reproducibility
         setup_seed(self.seed)
+        # for save.
+        self.train_exp_dir, _ = self._get_train_exp_dir()
+        # init logging
+        logging_file_path = os.path.join(self.train_exp_dir, DEFAULT_LOG_FILENAME)
+        config_logging(filename=logging_file_path)
         # Init dataloader
         train_rois, val_rois, test_rois = get_rois_from_split_file(self.split_file_path)
-        self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois)
-        self.val_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois)
+        self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois, debug=self.debug)
+        self.val_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois, debug=self.debug)
         # Init model and optim
         self.gpus = gpus
         self.model = build_model_with_dp(self.model_name, self.gpus)
@@ -61,11 +66,6 @@ class Trainer(object):
         # for summary
         self.best_val_psnr = 0
         self.best_val_ssim = 0
-        # for save.
-        self.train_exp_dir, _ = self._get_train_exp_dir()
-        # init logging
-        logging_file_path = os.path.join(self.train_exp_dir, DEFAULT_LOG_FILENAME)
-        config_logging(filename=logging_file_path)
 
     def _get_train_exp_dir(self) -> str:
         exp_dir = os.path.join(self.save_dir, TRAIN_SUBDIR_NAME, EXP_SUBDIR_NAME)
@@ -90,6 +90,7 @@ class Trainer(object):
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
         self.seed = config['seed']
+        self.debug = config['debug']
         if 'split_file_path' in config.keys():
             self.split_file_path = config['split_file_path']
         else:

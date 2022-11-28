@@ -15,6 +15,7 @@ from models.TSOCR_V2 import TSOCR_V2
 from models.TSOCR_V2m import TSOCR_V2m
 from models.TSOCR_V3 import TSOCR_V3
 from models.test_model import TestModel
+from models.cross_att_net import CrossAttNet, AblationNet1, AblationNet2, AblationNet3
 
 
 def _init_dsen2cr() -> nn.Module:
@@ -70,6 +71,25 @@ def _init_TSOCR_V3_model() -> nn.Module:
     model = model.cuda()
     return model
 
+def _init_cross_att_net() -> nn.Module:
+    model = CrossAttNet(13, 2)
+    model = model.cuda()
+    return model
+
+def _init_ablation_net1() -> nn.Module:
+    model = AblationNet1(13, 2)
+    model = model.cuda()
+    return model
+
+def _init_ablation_net2() -> nn.Module:
+    model = AblationNet2(13, 2)
+    model = model.cuda()
+    return model
+
+def _init_ablation_net3() -> nn.Module:
+    model = AblationNet3(13, 2)
+    model = model.cuda()
+    return model
 
 MODEL_MAPPER = {
     'MPRNet': _init_mprnet,
@@ -83,6 +103,10 @@ MODEL_MAPPER = {
     'TSOCR_V2': _init_TSOCR_V2_model,
     'TSOCR_V2m': _init_TSOCR_V2m_model,
     'TSOCR_V3': _init_TSOCR_V3_model,
+    'CrossAttNet': _init_cross_att_net,
+    'AblationNet1': _init_ablation_net1,
+    'AblationNet2': _init_ablation_net2,
+    'AblationNet3': _init_ablation_net3,
 }
 
 

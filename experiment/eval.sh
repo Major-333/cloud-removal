@@ -16,8 +16,7 @@ export WANDB_GROUP=$(date "+%Y%m%dT%H%M%S")
 export PYTHONPATH=$PWD
 echo $PYTHONPATH
 # load checkpoint
-export CHECKPOINT_PATH="old-runs/train/exp75/weights/Epoch4.pt"
-export CONFIG_PATH="old-runs/train/exp75/config-defaults.yaml"
+export CHECKPOINT_PATH="runs/train/exp11/weights/Epoch17.pt"
 # predict test dataset.
 export SAVE_PREDICT=1
 

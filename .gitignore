@@ -13,3 +13,4 @@ experiment/data*
 *.*info
 *debug*
 *runs*
+*.vscode*

@@ -134,6 +134,7 @@ class Trainer(Runner):
                 training_info = {**training_info , **{'epoch_loss': epoch_loss.item()}}
                 if epoch % self.validate_every == 0:
                     metric = Evaluater.evaluate(self.model, self.val_loader, EvaluateType.VALIDATE)
+                    logging.info(f'Epoch: {epoch}, Metric:{metric}')
                     training_info = {**training_info, **metric}
                     is_update = self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
                     if is_update:

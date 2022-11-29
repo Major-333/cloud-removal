@@ -91,6 +91,14 @@ class SEN12MSCRTriplet(object):
     def roi(self) -> Roi:
         return Roi(scene_id=self.scene_id, season=self.season)
 
+    def get_ms(self, x: str) -> np.array:
+        if x == 's2':
+            return self._load(self.s2_path(), S2Bands.ALL)
+        elif x == 's2_cloudy':
+            return self._load(self.s2_cloudy_path(), S2Bands.ALL)
+        elif x == 'predict':
+            return self._load(self.predict_path(), S2Bands.ALL)
+
     @property
     def data(self) -> Tuple[np.array, np.array, np.array]:
         """ Returns a triplet of orresponding Sentinel 1,
@@ -101,6 +109,10 @@ class SEN12MSCRTriplet(object):
         s2 = self._load(self.s2_path(), S2Bands.ALL)
         s2_cloudy = self._load(self.s2_cloudy_path(), S2Bands.ALL)
         return s1, s2, s2_cloudy
+    
+    @property
+    def predict(self) -> np.array:
+        return self._load(self.predict_path(), S2Bands.ALL)
 
     @property
     def data_with_cloud_mask(self) -> Tuple[np.array, np.array, np.array, np.array]:
@@ -152,6 +164,16 @@ class SEN12MSCRTriplet(object):
         season_dirname = f'{self.season.value}_predict'
         scene_dirname = f'predict_{self.scene_id}'
         filename = f'{self.season.value}_predict_{self.scene_id}_p{self.patch_id}.{file_extension}'
+        return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
+
+    def x_path(self, x: str, dataset_dir: str = None, file_extension: str = None) -> str:
+        if not dataset_dir:
+            dataset_dir = self.dataset_dir
+        if not file_extension:
+            file_extension = self.file_extension
+        season_dirname = f'{self.season.value}_{x}'
+        scene_dirname = f'{x}_{self.scene_id}'
+        filename = f'{self.season.value}_{x}_{self.scene_id}_p{self.patch_id}.{file_extension}'
         return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
 
     def cloud_mask_path(self, dataset_dir: str = None, file_extension: str = None):
@@ -261,48 +283,55 @@ class SEN12MSCRDataset(Dataset):
             )
         self.file_extension = file_extension
         self.rois = rois
-        self.triplets = self.get_all_triplets()
         self.use_cloud_mask = use_cloud_mask
         self.return_with_triplet = return_with_triplet
         # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
-        self._hack()
         logging.info(f'debug:{debug}')
-        if debug:
-            self.triplets = self.triplets[:min(len(self.triplets), 1024)]
+        self.is_debug = debug
 
-    def _hack(self):
+
+    @property
+    def triplets(self) -> List[SEN12MSCRTriplet]:
+        triplets = self.get_all_triplets()
+        # HACK: remove dirty triplet
+        triplets = self._hack(triplets)
+        if self.is_debug:
+            return triplets[:min(len(triplets), 1024)]
+        return triplets
+
+    def _hack(self, triplets: List[SEN12MSCRTriplet]) -> List[SEN12MSCRTriplet]:
         new_triplets = []
-        for triplet in self.triplets:
+        for triplet in triplets:
             # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
             if triplet.season == Season.SUMMER and int(triplet.scene_id) == 146 and int(triplet.patch_id) == 202:
                 continue
             new_triplets.append(triplet)
-        self.triplets = new_triplets
+        return new_triplets
 
     @property
     def filter_by_roi(self) -> bool:
         return self.rois
 
-    def get_scene_ids(self, season: Season) -> List[str]:
+    def get_scene_ids(self, season: Season, x: str='s1') -> List[str]:
         """ Returns a list of scene ids for a specific season.
         """
-        sensor = Sensor('s1')
-        season_dirname = f'{season.value}_{sensor.value}'
+        season_dirname = f'{season.value}_{x}'
         path = os.path.join(self.base_dir, season_dirname)
         if not os.path.exists(path):
-            raise NameError(f'Could not find season {season_dirname} in base directory {self.base_dir}')
+            logging.warn(f'Could not find season {season_dirname} in base directory {self.base_dir}')
+            return []
         scene_list = [os.path.basename(s) for s in glob(os.path.join(path, "*"))]
         scene_list = [int(s.split("_")[1]) for s in scene_list]
         return scene_list
 
-    def get_patch_ids(self, season: Season, scene_id: str) -> List[int]:
+    def get_patch_ids(self, season: Season, scene_id: str, x: str='s1') -> List[int]:
         """ Returns a list of patch ids for a specific scene within a specific season
         """
-        sensor = Sensor('s1')
-        season_dirname = f'{season.value}_{sensor.value}'
-        path = os.path.join(self.base_dir, season_dirname, f"s1_{scene_id}")
+        season_dirname = f'{season.value}_{x}'
+        path = os.path.join(self.base_dir, season_dirname, f"{x}_{scene_id}")
         if not os.path.exists(path):
-            raise NameError(f'Could not find scene {scene_id} within season {season_dirname}')
+            logging.warn(f'Could not find scene {scene_id} within season {season_dirname}')
+            return []
         patch_ids = [os.path.splitext(os.path.basename(p))[0] for p in glob(os.path.join(path, "*"))]
         patch_ids = [int(p.rsplit("_", 1)[1].split("p")[1]) for p in patch_ids]
         return patch_ids
@@ -427,6 +456,22 @@ class SEN12MSCRDataset(Dataset):
                 patch_list = self.get_patch_ids(season, sid)
                 for pid in patch_list:
                     triplet = SEN12MSCRTriplet(self.base_dir, season, sid, pid, self.file_extension)
+                    if not self.filter_by_roi or triplet.in_rois(self.rois):
+                        triplets.append(triplet)
+        return triplets
+
+    def get_existed_triplets_with_x(self, x: str) -> List[SEN12MSCRTriplet]:
+        triplets = []
+        for season_value in Season.ALL.value:
+            season = Season(season_value)
+            scene_list = self.get_scene_ids(season, x=x)
+            for sid in scene_list:
+                patch_list = self.get_patch_ids(season, sid, x=x)
+                for pid in patch_list:
+                    triplet = SEN12MSCRTriplet(self.base_dir, season, sid, pid, self.file_extension)
+                    # if triplet x data is not existed, skip it.
+                    if not os.path.exists(triplet.x_path(x=x)):
+                        continue
                     if not self.filter_by_roi or triplet.in_rois(self.rois):
                         triplets.append(triplet)
         return triplets

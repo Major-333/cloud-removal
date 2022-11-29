@@ -24,7 +24,7 @@ CONFIG_FILEPATH = './config-defaults.yaml'
 EVAL_SUBDIR_NAME = 'val'
 METRIC_FILENAME = 'metric.csv'
 METADATA_FILENAME = 'metadata.yaml'
-PREDICTS_DIRNAME = 'predicts'
+PREDICTS_DIRNAME = 'predict'
 
 class EvaluateType(enum.Enum):
     VALIDATE = 'validate'
@@ -114,8 +114,8 @@ class Evaluater(Runner):
             if save_predict:
                 if not predicts_dir_path:
                     raise ValueError('predicts_dir_path is None')
-                for triplet in triplets:
-                    triplet.save_predict(predicts_dir_path, output.detach().cpu().numpy())
+                for index, triplet in enumerate(triplets):
+                    triplet.save_predict(predicts_dir_path, output[index, :, :, :].detach().cpu().numpy())
         return {
             f'{eval_type.value}_rmse': total_rmse / batch_count,
             f'{eval_type.value}_psnr': total_psnr / batch_count,

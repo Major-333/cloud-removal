@@ -16,18 +16,16 @@ from datetime import datetime, timedelta
 from sen12ms_cr_dataset.build import build_distributed_loaders_with_rois, build_loaders, build_loaders_with_rois
 from models.build import build_model_with_dp
 from loss.build import build_loss_fn
-from evaluate import EvaluateType, Evaluater
+from runners.evaluate import EvaluateType, Evaluater
 from utils import get_rois_from_split_file, increment_path, setup_seed, config_logging, DEFAULT_LOG_FILENAME
+from runners.runner import Runner
 
 START_TIME = (datetime.utcnow() + timedelta(hours=8)).strftime('%Y%m%d%H%M')
 CHECKPOINT_NAME_PREFIX = 'Epoch'
 TRAIN_SUBDIR_NAME = 'train'
 VAL_SUBDIR_NAME = 'val'
-EXP_SUBDIR_NAME = 'exp'
 WEIGHTS_DIR_NAME = 'weights'
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-CONFIG_FILENAME = 'config-defaults.yaml'
-DEFAULT_SPLIT_FILENAME = 'split.yaml'
 
 def init_wandb_with_dp(group: str) -> Dict:
     wandb.init(project='cloud removal V2', group=group, job_type='DP mode')
@@ -36,19 +34,10 @@ def init_wandb_with_dp(group: str) -> Dict:
     return config
 
 
-class Trainer(object):
+class Trainer(Runner):
 
     def __init__(self, config: Dict, gpus: List[int], checkpoint_path: Optional[str] = None) -> None:
-        # Load config to trainer
-        self._parse_config(config)
-        self.config = config
-        # Fix random seed for reproducibility
-        setup_seed(self.seed)
-        # for save.
-        self.train_exp_dir, _ = self._get_train_exp_dir()
-        # init logging
-        logging_file_path = os.path.join(self.train_exp_dir, DEFAULT_LOG_FILENAME)
-        config_logging(filename=logging_file_path)
+        super(Trainer, self).__init__(config, TRAIN_SUBDIR_NAME)
         # Init dataloader
         train_rois, val_rois, test_rois = get_rois_from_split_file(self.split_file_path)
         self.train_loader = build_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois, debug=self.debug)
@@ -67,34 +56,8 @@ class Trainer(object):
         self.best_val_psnr = 0
         self.best_val_ssim = 0
 
-    def _get_train_exp_dir(self) -> str:
-        exp_dir = os.path.join(self.save_dir, TRAIN_SUBDIR_NAME, EXP_SUBDIR_NAME)
-        exp_dir = increment_path(exp_dir)
-        # save metadata info
-        config_path = os.path.join(exp_dir, CONFIG_FILENAME)
-        shutil.copyfile(CONFIG_FILENAME, config_path)
-        if self.split_file_path:
-            split_file_path = os.path.join(exp_dir, DEFAULT_SPLIT_FILENAME)
-            shutil.copyfile(self.split_file_path, split_file_path)
-        return exp_dir
-
-    def _parse_config(self, config: Dict):
-        self.max_epoch = config['epochs']
-        self.model_name = config['model']
-        self.dataset_path = config['dataset']
-        self.batch_size = config['batch_size']
-        self.lr = config['lr']
-        self.min_lr = config['min_lr']
-        self.loss_name = config['loss_fn']
-        self.validate_every = config['validate_every']
-        self.save_dir = config['save_dir']
-        self.dataset_file_extension = config['dataset_file_extension']
-        self.seed = config['seed']
-        self.debug = config['debug']
-        if 'split_file_path' in config.keys():
-            self.split_file_path = config['split_file_path']
-        else:
-            self.split_file_path = None
+    def _init_runner(self, config: Dict, save_subdir_name: str):
+        super(Trainer, self).__init__(config, save_subdir_name)
 
     def _get_optimizer(self, model: nn.Module) -> Optimizer:
         return torch.optim.Adam(model.parameters(), lr=self.lr)
@@ -144,7 +107,7 @@ class Trainer(object):
         wandb.finish()
 
     def _save(self, model: nn.Module, epoch: int) -> None:
-        weights_dir = os.path.join(self.train_exp_dir, WEIGHTS_DIR_NAME)
+        weights_dir = os.path.join(self.save_dir, WEIGHTS_DIR_NAME)
         if not os.path.exists(weights_dir):
             os.makedirs(weights_dir)
         checkpoint_name = f'{CHECKPOINT_NAME_PREFIX}{epoch}.pt'
@@ -179,7 +142,6 @@ class Trainer(object):
             self.scheduler.step()
         self._finish()
 
-
 def run(group: str, gpus: List[int], checkpoint_relpath: Optional[str] = None):
     try:
         config = init_wandb_with_dp(group)
@@ -187,7 +149,7 @@ def run(group: str, gpus: List[int], checkpoint_relpath: Optional[str] = None):
         if checkpoint_relpath:
             checkpoint_path = os.path.join(config['checkpoints_dir'], checkpoint_relpath)
             logging.info(f'===loading model state from:{checkpoint_path}===')
-        trainer = Trainer(config, gpus, checkpoint_path)
+        trainer = Trainer(config, gpus, checkpoint_path=checkpoint_path)
         trainer.train()
     except Exception as e:
         logging.error(f'Falied in training:{str(e)}, traceback:{traceback.format_exc()}')

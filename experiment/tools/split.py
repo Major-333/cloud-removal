@@ -6,7 +6,7 @@ import random
 from typing import List, Tuple
 from utils import config_logging, setup_seed, roi_to_str, str_to_roi
 from sen12ms_cr_dataset.dataset import Roi, SEN12MSCRDataset, SEN12MSCRTriplet, Season
-from train import DEFAULT_SPLIT_FILENAME
+from runners.train import DEFAULT_SPLIT_FILENAME
 
 def run(dataset_path: str) -> None:
     dataset = SEN12MSCRDataset(dataset_path,file_extension='npy')

@@ -16,34 +16,18 @@ from datetime import datetime, timedelta
 from sen12ms_cr_dataset.build import build_distributed_loaders, build_distributed_loaders_with_rois
 from models.build import build_distributed_model
 from loss.build import build_loss_fn
-from train import Trainer, CHECKPOINT_NAME_PREFIX
-from evaluate import Evaluater, EvaluateType
+from runners.train import Trainer, CHECKPOINT_NAME_PREFIX, TRAIN_SUBDIR_NAME
+from runners.evaluate import Evaluater, EvaluateType
 from utils import setup_seed, get_rois_from_split_file, DEFAULT_LOG_FILENAME, config_logging
 
 class DistributedTrainer(Trainer):
     def __init__(self, config: Dict, local_rank: int, checkpoint_path: Optional[str] = None) -> None:
-        # Load config to trainer
-        self._parse_config(config)
-        self.config = config
-        # Fix random seed for reproducibility
-        setup_seed(self.seed)
+        self._runner_init(config, TRAIN_SUBDIR_NAME)
         # initialize PyTorch distributed using environment variables (you could also do this more explicitly by specifying `rank` and `world_size`,
         #  but I find using environment variables makes it so that you can easily use the same script on different machines)
         dist.init_process_group(backend='nccl', init_method='env://')
         self.local_rank = local_rank
         torch.cuda.set_device(f'cuda:{local_rank}')
-        # for save.
-        if self.is_master:
-            self.train_exp_dir = self._get_train_exp_dir()
-            dist.broadcast_object_list([self.train_exp_dir])
-        else:
-            broadcast_msg = [None]
-            dist.broadcast_object_list(broadcast_msg, src=0)
-            self.train_exp_dir = broadcast_msg[0]
-        # init logging
-        logging_file_path = os.path.join(self.train_exp_dir, f'{DEFAULT_LOG_FILENAME}_{self.local_rank}')
-        config_logging(filename=logging_file_path)
-        logging.info(f'rank:{self.local_rank} Trainer has been initialized.')
         # Init dataloader
         if self.split_file_path:
             logging.info(f'use spit file:{self.split_file_path}')

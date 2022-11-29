@@ -143,6 +143,16 @@ class SEN12MSCRTriplet(object):
         scene_dirname = f's2_cloudy_{self.scene_id}'
         filename = f'{self.season.value}_s2_cloudy_{self.scene_id}_p{self.patch_id}.{file_extension}'
         return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
+    
+    def predict_path(self, dataset_dir: str = None, file_extension: str = None) -> str:
+        if not dataset_dir:
+            dataset_dir = self.dataset_dir
+        if not file_extension:
+            file_extension = self.file_extension
+        season_dirname = f'{self.season.value}_predict'
+        scene_dirname = f'predict_{self.scene_id}'
+        filename = f'{self.season.value}_predict_{self.scene_id}_p{self.patch_id}.{file_extension}'
+        return os.path.join(dataset_dir, season_dirname, scene_dirname, filename)
 
     def cloud_mask_path(self, dataset_dir: str = None, file_extension: str = None):
         if not dataset_dir:
@@ -200,6 +210,10 @@ class SEN12MSCRTriplet(object):
         self._save_patch(s2_path, s2)
         self._save_patch(s2_cloudy_path, s2_cloudy)
 
+    def save_predict(self, dataset_dir: str, predict: np.array, file_extension: str='npy') -> None:
+        predict_path = self.predict_path(dataset_dir, file_extension=file_extension)
+        self._save_patch(predict_path, predict)
+
     def save_with_cloudy_mask(self, dataset_dir: str, data: Tuple[np.array, np.array, np.array, np.array] = None) -> None:
         if not data:
             data = self.data_with_cloud_mask
@@ -215,9 +229,11 @@ class SEN12MSCRTriplet(object):
 
     def to_dict(self) -> Dict:
         return {
+            'dataset_dir': self.dataset_dir,
             'season': self.season.value,
             'scene_id': self.scene_id,
-            'patch_id': self.patch_id
+            'patch_id': self.patch_id,
+            'file_extension': self.file_extension
         }
 
 class SEN12MSCRDataset(Dataset):
@@ -235,7 +251,7 @@ class SEN12MSCRDataset(Dataset):
     Note: The order in which you request the bands is the same order they will be returned in.
     """
 
-    def __init__(self, base_dir, file_extension: str = 'tif', rois: List[Roi] = None, use_cloud_mask: bool=False, debug: bool=False):
+    def __init__(self, base_dir, file_extension: str = 'tif', rois: List[Roi] = None, use_cloud_mask: bool=False, debug: bool=False, return_with_triplet: bool=False):
         self.base_dir = base_dir
         if not os.path.exists(self.base_dir):
             raise Exception(f'SEN12MSCRDataset faled to init. base_dir:{base_dir} does not exist')
@@ -247,6 +263,7 @@ class SEN12MSCRDataset(Dataset):
         self.rois = rois
         self.triplets = self.get_all_triplets()
         self.use_cloud_mask = use_cloud_mask
+        self.return_with_triplet = return_with_triplet
         # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
         self._hack()
         logging.info(f'debug:{debug}')
@@ -422,11 +439,17 @@ class SEN12MSCRDataset(Dataset):
         if self.use_cloud_mask:
             s1, s2, s2_cloudy, cloud_mask = triplet.data_with_cloud_mask
             s1, s2, s2_cloudy, cloud_mask = np.float32(s1), np.float32(s2), np.float32(s2_cloudy), np.float32(cloud_mask)
-            return np.concatenate((s1, s2_cloudy), axis=0), s2, cloud_mask
+            if self.return_with_triplet:
+                return np.concatenate((s1, s2_cloudy), axis=0), s2, cloud_mask, triplet.to_dict()
+            else:
+                return np.concatenate((s1, s2_cloudy), axis=0), s2, cloud_mask
         else:
             s1, s2, s2_cloudy = triplet.data
             s1, s2, s2_cloudy = np.float32(s1), np.float32(s2), np.float32(s2_cloudy)
-            return np.concatenate((s1, s2_cloudy), axis=0), s2
+            if self.return_with_triplet:
+                return np.concatenate((s1, s2_cloudy), axis=0), s2, triplet.to_dict()
+            else:
+                return np.concatenate((s1, s2_cloudy), axis=0), s2
 
 
 if __name__ == "__main__":

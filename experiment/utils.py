@@ -70,3 +70,12 @@ def get_rois_from_split_file(split_file_path: str) -> Tuple[List[Roi], List[Roi]
     val_rois = [str_to_roi(roi_str) for roi_str in split_config['rois']['val']]
     test_rois = [str_to_roi(roi_str) for roi_str in split_config['rois']['test']]
     return train_rois, val_rois, test_rois
+
+def convert_range(original_data: object, original_range: Tuple[int], target_range: Tuple[int]):
+    original_mean = (original_range[0] + original_range[1]) / 2
+    original_span = original_range[1] - original_range[0]
+    target_mean = (target_range[0] + target_range[1]) / 2
+    target_span = target_range[1] - target_range[0]
+    mid_data = (original_data - original_mean) / original_span
+    target_data = mid_data * target_span + target_mean
+    return target_data

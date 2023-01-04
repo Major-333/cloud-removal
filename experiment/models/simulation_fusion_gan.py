@@ -3,6 +3,7 @@ import torch.nn as nn
 
 import torch
 import torch.nn as nn
+from utils import convert_range
 
 '''
 Simulation net and its building blocks:
@@ -34,11 +35,8 @@ class SimulationNet(nn.Module):
         self.out_conv = SimOutConv(128, out_channels)
         self.color_jitter = MyColorJitter()
 
-    '''
-    Input data range: [-1, 1]
-    Output data range: [-1, 1]
-    '''
     def forward(self, concated_corrupted_sar_image):
+        concated_corrupted_sar_image = original_to_input(concated_corrupted_sar_image)
         sar_image = concated_corrupted_sar_image[:, :2, :, :]
         in_feature_map = self.in_conv(sar_image)
         down_feature_map_1 = self.down1(in_feature_map)
@@ -55,6 +53,7 @@ class SimulationNet(nn.Module):
         up_feature_map_1 = self.up1(up_feature_map_2, in_feature_map)
         out_conv_feature_map = self.out_conv(up_feature_map_1)
         simulated_image = out_conv_feature_map
+        simulated_image = output_to_original(simulated_image)
         '''
         If model is not training
         Then according to paper
@@ -150,15 +149,9 @@ class MyColorJitter(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-    '''
-    Input data range: [-1, 1]
-    Output data range: [-1, 1]
-    '''
     def forward(self, img):
-        img = (img + 1) / 2
         img = self.adjust_brightness(img)
         img = self.adjust_contrast(img)
-        img = img * 2 - 1
         return img
 
     def adjust_brightness(self, img):
@@ -203,11 +196,8 @@ class FusionNet(nn.Module):
         self.up1 = FusionUp(256, 64)
         self.out_conv = FusionOutConv(128, out_channels)
 
-    '''
-    Input data range: [-1, 1]
-    Output data range: [-1, 1]
-    '''
     def forward(self, simulation_image, concated_corrupted_sar_image):
+        concated_corrupted_sar_image = original_to_input(concated_corrupted_sar_image)
         concated_simulation_corrupted_sar_image = torch.cat((simulation_image, concated_corrupted_sar_image), dim=1)
         in_feature_map = self.in_conv(concated_simulation_corrupted_sar_image)
         down_feature_map_1 = self.down1(in_feature_map)
@@ -224,6 +214,7 @@ class FusionNet(nn.Module):
         up_feature_map_1 = self.up1(up_feature_map_2, in_feature_map)
         out_conv_feature_map = self.out_conv(up_feature_map_1)
         simulated_image = out_conv_feature_map
+        simulated_image = output_to_original(simulated_image)
         return simulated_image
 
 
@@ -318,11 +309,8 @@ class DiscriminativeNet(nn.Module):
         self.middle_conv = DiscMiddleConv(128, 256)
         self.out_conv = DiscOutConv(256)
 
-    '''
-    Input data range: [-1, 1]
-    Output data range: (0, 1)
-    '''
     def forward(self, concated_optical_sar_image):
+        concated_optical_sar_image = original_to_input(concated_optical_sar_image)
         down_feature_map_1 = self.down1(concated_optical_sar_image)
         down_feature_map_2 = self.down2(down_feature_map_1)
         middle_conv_feature_map = self.middle_conv(down_feature_map_2)
@@ -369,3 +357,9 @@ class DiscOutConv(nn.Module):
         out_conv_feature_map = self.conv(last_feature_map)
         prediction_map = self.sigmoid(out_conv_feature_map)
         return prediction_map
+
+def original_to_input(original):
+    return convert_range(original, (0,1), (-1,1))
+
+def output_to_original(output):
+    return convert_range(output, (-1,1), (0,1))

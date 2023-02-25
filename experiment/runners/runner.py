@@ -35,19 +35,22 @@ class Runner(object):
         return exp_dir
 
     def _parse_config(self, config: Dict):
+        self._parse_general_config(config)
+        self._parse_model_specific_config(config)
+    
+    def _parse_general_config(self, config: Dict):
         self.max_epoch = config['epochs']
-        self.model_name = config['model']
         self.dataset_path = config['dataset']
         self.batch_size = config['batch_size']
-        self.lr = config['lr']
-        self.min_lr = config['min_lr']
-        self.loss_name = config['loss_fn']
         self.validate_every = config['validate_every']
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
         self.seed = config['seed']
         self.debug = config['debug']
-        if 'split_file_path' in config.keys():
-            self.split_file_path = config['split_file_path']
-        else:
-            self.split_file_path = None
+        self.split_file_path = config.get('split_file_path')
+        
+    def _parse_model_specific_config(self, config: Dict):
+        self.model_name = config['model']
+        self.lr = config['lr']
+        self.min_lr = config['min_lr']
+        self.loss_name = config['loss_fn']

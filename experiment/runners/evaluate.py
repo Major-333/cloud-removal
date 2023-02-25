@@ -58,7 +58,8 @@ class Evaluater(Runner):
         elif eval_type == EvaluateType.TEST:
             loader = self.test_loader
         logging.info(f'save_predict is: {self.save_predict}')
-        metric = self.evaluate(self.model, loader, eval_type=eval_type, save_predict=self.save_predict, predicts_dir_path=os.path.join(self.save_dir, PREDICTS_DIRNAME))
+        self.model.eval()
+        metric = self.evaluate(lambda x: self.model(x), loader, eval_type=eval_type, save_predict=self.save_predict, predicts_dir_path=os.path.join(self.save_dir, PREDICTS_DIRNAME))
         self._save(metric, checkpoint_path, eval_type)
 
     def _save(self, metric: Dict, checkpoint_path: str, eval_type: EvaluateType) -> None:
@@ -85,10 +86,9 @@ class Evaluater(Runner):
     @staticmethod
     def save_ms_img(ms: np.array):
         pass
-
+    
     @staticmethod
-    def evaluate(model: nn.Module, dataloader: DataLoader, eval_type: EvaluateType, save_predict:bool=False, predicts_dir_path:str=None) -> Dict:
-        model.eval()
+    def evaluate(forward, dataloader: DataLoader, eval_type: EvaluateType, save_predict:bool=False, predicts_dir_path:str=None) -> Dict:
         batch_count = len(dataloader)
         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
         logging.info(f'batch size:{dataloader.batch_size}, loader length is: {batch_count}')
@@ -103,7 +103,7 @@ class Evaluater(Runner):
                 cloudy, ground_truth = data_batch
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():
-                output = model(cloudy)
+                output = forward(cloudy)
                 output[output < 0] = 0
                 output[output > 1] = 1
                 total_rmse += get_rmse(output, ground_truth).item()
@@ -123,6 +123,7 @@ class Evaluater(Runner):
             f'{eval_type.value}_sam': total_sam / batch_count,
             f'{eval_type.value}_mae': total_mae / batch_count,
         }
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='Evaluate the Cloud Removal network')

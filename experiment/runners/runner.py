@@ -46,6 +46,7 @@ class Runner(object):
         self.save_dir = config['save_dir']
         self.dataset_file_extension = config['dataset_file_extension']
         self.seed = config['seed']
+        self.use_cloud_mask = config['use_cloud_mask']
         self.debug = config['debug']
         self.split_file_path = config.get('split_file_path')
         

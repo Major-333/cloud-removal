@@ -123,7 +123,7 @@ class SEN12MSCRTriplet(object):
         s1 = self._load(self.s1_path(), S1Bands.ALL)
         s2 = self._load(self.s2_path(), S2Bands.ALL)
         s2_cloudy = self._load(self.s2_cloudy_path(), S2Bands.ALL)
-        cloud_mask = self._load(self.mask_path(), S2Bands.ALL)
+        cloud_mask = self._load(self.cloud_mask_path(), S2Bands.ALL)
         return s1, s2, s2_cloudy, cloud_mask
 
     def s1_path(self, dataset_dir: str = None, file_extension: str = None) -> str:
@@ -288,25 +288,23 @@ class SEN12MSCRDataset(Dataset):
         # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
         logging.info(f'debug:{debug}')
         self.is_debug = debug
+        self._init_triplets()
 
-
-    @property
-    def triplets(self) -> List[SEN12MSCRTriplet]:
-        triplets = self.get_all_triplets()
+    def _init_triplets(self):
+        self.triplets = self.get_all_triplets()
         # HACK: remove dirty triplet
-        triplets = self._hack(triplets)
+        self._hack()
         if self.is_debug:
-            return triplets[:min(len(triplets), 1024)]
-        return triplets
+            self.triplets = self.triplets[:min(len(self.triplets), 1024)]
 
-    def _hack(self, triplets: List[SEN12MSCRTriplet]) -> List[SEN12MSCRTriplet]:
+    def _hack(self):
         new_triplets = []
-        for triplet in triplets:
+        for triplet in self.triplets:
             # HACK remove ROIs1868_summer_s1_146_202 to avoid nan input
             if triplet.season == Season.SUMMER and int(triplet.scene_id) == 146 and int(triplet.patch_id) == 202:
                 continue
             new_triplets.append(triplet)
-        return new_triplets
+        self.triplets = new_triplets
 
     @property
     def filter_by_roi(self) -> bool:

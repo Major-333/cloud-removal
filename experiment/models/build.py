@@ -16,7 +16,7 @@ from models.TSOCR_V2m import TSOCR_V2m
 from models.TSOCR_V3 import TSOCR_V3
 from models.test_model import TestModel
 from models.cross_att_net import CrossAttNet, AblationNet1, AblationNet2, AblationNet3
-from models.simulation_fusion_gan import SimulationNet
+from models.simulation_fusion_gan import SimulationNet, FusionNet, DiscriminativeNet
 
 
 def _init_dsen2cr() -> nn.Module:
@@ -97,6 +97,16 @@ def _init_simulation_net() -> nn.Module:
     model = model.cuda()
     return model
 
+def _init_fusion_net() -> nn.Module:
+    model = FusionNet(in_channels=28, out_channels=13)
+    model = model.cuda()
+    return model
+
+def _init_discriminative_net() -> nn.Module:
+    model = DiscriminativeNet(in_channels=15)
+    model = model.cuda()
+    return model
+
 MODEL_MAPPER = {
     'MPRNet': _init_mprnet,
     'Restormer': _init_restormer,
@@ -113,7 +123,9 @@ MODEL_MAPPER = {
     'AblationNet1': _init_ablation_net1,
     'AblationNet2': _init_ablation_net2,
     'AblationNet3': _init_ablation_net3,
-    'SimulationNet': _init_simulation_net
+    'SimulationNet': _init_simulation_net,
+    'FusionNet': _init_fusion_net,
+    'DiscriminativeNet': _init_discriminative_net
 }
 
 

@@ -4,14 +4,14 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 
 
-def build_distributed_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi], debug: bool=False, return_with_triplet: bool=False) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois, debug=debug, return_with_triplet=return_with_triplet)
+def build_distributed_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi], use_cloud_mask: bool=False, debug: bool=False, return_with_triplet: bool=False) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois, use_cloud_mask=use_cloud_mask, debug=debug, return_with_triplet=return_with_triplet)
     data_sampler = DistributedSampler(dataset)
     return DataLoader(dataset, batch_size=batch_size, num_workers=4, pin_memory=True, sampler=data_sampler)
 
 
-def build_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi], debug: bool=False, return_with_triplet: bool=False) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois, debug=debug, return_with_triplet=return_with_triplet)
+def build_loaders_with_rois(dataset_path: str, batch_size: int, file_extension: str, rois: List[Roi], use_cloud_mask: bool=False, debug: bool=False, return_with_triplet: bool=False) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    dataset = SEN12MSCRDataset(dataset_path, file_extension, rois=rois, use_cloud_mask=use_cloud_mask,debug=debug, return_with_triplet=return_with_triplet)
     return DataLoader(dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
 
 

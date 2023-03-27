@@ -41,8 +41,8 @@ class DistributedTrainer(Trainer):
         if self.split_file_path:
             logging.info(f'use spit file:{self.split_file_path}')
             train_rois, val_rois, _ = get_rois_from_split_file(self.split_file_path)
-            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois, debug=self.debug)
-            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois, debug=self.debug)
+            self.train_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, train_rois, use_cloud_mask=self.use_cloud_mask, debug=self.debug)
+            self.val_loader = build_distributed_loaders_with_rois(self.dataset_path, self.batch_size, self.dataset_file_extension, val_rois, use_cloud_mask=self.use_cloud_mask, debug=self.debug)
         else:
             logging.info(f'using random split')
             self.train_loader, self.val_loader, _ = build_distributed_loaders(self.dataset_path, self.batch_size, self.dataset_file_extension)

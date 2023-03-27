@@ -8,7 +8,7 @@ import torch
 from torch.optim import Optimizer
 from torch import nn, distributed
 from models.build import build_distributed_gan_model, build_distributed_pretrained_model
-from loss.build import build_loss_fn, build_distributed_gan_loss_fn
+from loss.build import build_loss_fn, build_cuda_loss_fn
 from runners.train import CHECKPOINT_NAME_PREFIX, WEIGHTS_DIR_NAME
 from runners.evaluate import EvaluateType, Evaluater
 from runners.distributed_train import DistributedTrainer, DistributedTrainStarter
@@ -32,7 +32,7 @@ class DistributedGANTrainer(DistributedTrainer):
         self.model_S.eval()
 
         self.model_G = build_distributed_gan_model(self.model_name_G, gpu_id=self.local_rank)
-        self.loss_fn_G = build_distributed_gan_loss_fn(self.loss_name_G, gpu_id=self.local_rank)
+        self.loss_fn_G = build_cuda_loss_fn(self.loss_name_G, gpu_id=self.local_rank)
 
         self.model_D = build_distributed_gan_model(self.model_name_D, gpu_id=self.local_rank)
         self.loss_fn_D = build_loss_fn(self.loss_name_D)
@@ -44,6 +44,9 @@ class DistributedGANTrainer(DistributedTrainer):
         self.optimizer_D = self._get_optimizer(self.model_D, self.lr_D)
         self.scheduler_D = self._get_scheduler(self.optimizer_D)
 
+    def _get_optimizer(self, model: nn.Module, lr: float) -> Optimizer:
+        return torch.optim.Adam(model.parameters(), lr=lr)
+    
     def _get_scheduler(self, optimizer: Optimizer) -> object:
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         return scheduler
@@ -122,7 +125,7 @@ class DistributedGANTrainer(DistributedTrainer):
                 if epoch % self.validate_every == 0:
                     distributed.barrier()
                     metric = Evaluater.evaluate(lambda x: self.model_G(self.model_S(x), x), self.val_loader,
-                                                                      EvaluateType.VALIDATE)
+                                                                      EvaluateType.VALIDATE, use_cloud_mask=self.use_cloud_mask)
                     training_info = {**training_info, **metric}
                     is_update = self._update_summary(metric, epoch, metric_prefix=EvaluateType.VALIDATE.value)
                     if is_update and self.local_rank == 0:

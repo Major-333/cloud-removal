@@ -88,19 +88,25 @@ class Evaluater(Runner):
         pass
     
     @staticmethod
-    def evaluate(forward, dataloader: DataLoader, eval_type: EvaluateType, save_predict:bool=False, predicts_dir_path:str=None) -> Dict:
+    def evaluate(forward, dataloader: DataLoader, eval_type: EvaluateType, use_cloud_mask:bool=False, save_predict:bool=False, predicts_dir_path:str=None) -> Dict:
         batch_count = len(dataloader)
         total_rmse, total_psnr, total_ssim, total_sam, total_mae = 0, 0, 0, 0, 0
         logging.info(f'batch size:{dataloader.batch_size}, loader length is: {batch_count}')
         for _, data_batch in enumerate(tqdm(dataloader, desc=f'pid: {os.getpid()}. {eval_type} round')):
             if save_predict:
-                cloudy, ground_truth, triplets_dict = data_batch
+                if use_cloud_mask:
+                    cloudy, ground_truth, _, triplets_dict = data_batch
+                else:
+                    cloudy, ground_truth, triplets_dict = data_batch
                 triplets = [
                     SEN12MSCRTriplet(triplets_dict['dataset_dir'][i], Season(triplets_dict['season'][i]), triplets_dict['scene_id'][i], triplets_dict['patch_id'][i], triplets_dict['file_extension'][i])
                     for i in range(len(triplets_dict['dataset_dir']))
                 ]
             else:
-                cloudy, ground_truth = data_batch
+                if use_cloud_mask:
+                    cloudy, ground_truth, _ = data_batch
+                else:
+                    cloudy, ground_truth = data_batch
             cloudy, ground_truth = cloudy.cuda(), ground_truth.cuda()
             with torch.no_grad():
                 output = forward(cloudy)

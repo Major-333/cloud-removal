@@ -5,15 +5,15 @@ from torch import nn
 from tqdm import tqdm
 from functools import partial
 from inspect import isfunction
+from utils import convert_range
 
 class Diffusion_CR(nn.Module):
-    def __init__(self, beta_schedule):
+    def __init__(self):
         super().__init__()
         self.denoise_fn = UNet()
-        self.beta_schedule = beta_schedule
 
-    def set_loss(self, loss_fn):
-        self.loss_fn = loss_fn
+    def set_beta_schedule(self, beta_schedule):
+        self.beta_schedule = beta_schedule
 
     def set_new_noise_schedule(self, device=torch.device('cuda'), phase='train'):
         to_torch = partial(torch.tensor, dtype=torch.float32, device=device)
@@ -54,10 +54,10 @@ class Diffusion_CR(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, y_t.shape)
         return posterior_mean, posterior_log_variance_clipped
 
-    def p_mean_variance(self, y_t, t, clip_denoised: bool, y_cond=None):
+    def p_mean_variance(self, y_t, y_ms, y_sar, t, clip_denoised: bool):
         noise_level = extract(self.gammas, t, x_shape=(1, 1)).to(y_t.device)
         y_0_hat = self.predict_start_from_noise(
-                y_t, t=t, noise=self.denoise_fn(torch.cat([y_cond, y_t], dim=1), noise_level))
+                y_t, t=t, noise=self.denoise_fn(torch.cat([y_t, y_ms, y_sar], dim=1), noise_level))
 
         if clip_denoised:
             y_0_hat.clamp_(-1., 1.)
@@ -74,50 +74,39 @@ class Diffusion_CR(nn.Module):
         )
 
     @torch.no_grad()
-    def p_sample(self, y_t, t, clip_denoised=True, y_cond=None):
+    def p_sample(self, y_t, y_ms, y_sar, t, clip_denoised=True):
         model_mean, model_log_variance = self.p_mean_variance(
-            y_t=y_t, t=t, clip_denoised=clip_denoised, y_cond=y_cond)
+            y_t=y_t, y_ms=y_ms, y_sar=y_sar, t=t, clip_denoised=clip_denoised)
         noise = torch.randn_like(y_t) if any(t>0) else torch.zeros_like(y_t)
         return model_mean + noise * (0.5 * model_log_variance).exp()
 
     @torch.no_grad()
-    def restoration(self, y_cond, y_t=None, y_0=None, mask=None, sample_num=8):
-        b, *_ = y_cond.shape
-
-        assert self.num_timesteps > sample_num, 'num_timesteps must greater than sample_num'
-        sample_inter = (self.num_timesteps//sample_num)
-        
-        y_t = default(y_t, lambda: torch.randn_like(y_cond))
-        ret_arr = y_t
+    def restoration(self, y_ms, y_sar):
+        b, *_ = y_ms.shape
+        y_ms, y_sar = original_to_input(y_ms), original_to_input(y_sar)
+        y_t = torch.randn_like(y_ms)
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-            t = torch.full((b,), i, device=y_cond.device, dtype=torch.long)
-            y_t = self.p_sample(y_t, t, y_cond=y_cond)
-            if mask is not None:
-                y_t = y_0*(1.-mask) + mask*y_t
-            if i % sample_inter == 0:
-                ret_arr = torch.cat([ret_arr, y_t], dim=0)
-        return y_t, ret_arr
+            t = torch.full((b,), i, device=y_ms.device, dtype=torch.long)
+            y_t = self.p_sample(y_t, y_ms, y_sar, t)
+        return output_to_original(y_t)
 
-    def forward(self, y_0, y_cond=None, mask=None, noise=None):
+    def forward(self, y_0, y_ms, y_sar):
         # sampling from p(gammas)
         b, *_ = y_0.shape
+        y_0, y_ms, y_sar = original_to_input(y_0), original_to_input(y_ms), original_to_input(y_sar)
+        
         t = torch.randint(1, self.num_timesteps, (b,), device=y_0.device).long()
         gamma_t1 = extract(self.gammas, t-1, x_shape=(1, 1))
         sqrt_gamma_t2 = extract(self.gammas, t, x_shape=(1, 1))
         sample_gammas = (sqrt_gamma_t2-gamma_t1) * torch.rand((b, 1), device=y_0.device) + gamma_t1
         sample_gammas = sample_gammas.view(b, -1)
 
-        noise = default(noise, lambda: torch.randn_like(y_0))
+        noise = torch.randn_like(y_0)
         y_noisy = self.q_sample(
             y_0=y_0, sample_gammas=sample_gammas.view(-1, 1, 1, 1), noise=noise)
 
-        if mask is not None:
-            noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy*mask+(1.-mask)*y_0], dim=1), sample_gammas)
-            loss = self.loss_fn(mask*noise, mask*noise_hat)
-        else:
-            noise_hat = self.denoise_fn(torch.cat([y_cond, y_noisy], dim=1), sample_gammas)
-            loss = self.loss_fn(noise, noise_hat)
-        return loss
+        noise_hat = self.denoise_fn(torch.cat([y_noisy, y_ms, y_sar], dim=1), sample_gammas)
+        return noise_hat, noise
 
 class UNet(nn.Module):
     def __init__(
@@ -127,25 +116,20 @@ class UNet(nn.Module):
         inner_channel=32,
         norm_groups=32,
         channel_mults=(1, 2, 4, 8, 8),
-        attn_res=(8),
+        attn_res=(8,),
         res_blocks=3,
         dropout=0,
-        with_noise_level_emb=True,
         image_size=128
     ):
         super().__init__()
 
-        if with_noise_level_emb:
-            noise_level_channel = inner_channel
-            self.noise_level_mlp = nn.Sequential(
-                PositionalEncoding(inner_channel),
-                nn.Linear(inner_channel, inner_channel * 4),
-                Swish(),
-                nn.Linear(inner_channel * 4, inner_channel)
-            )
-        else:
-            noise_level_channel = None
-            self.noise_level_mlp = None
+        noise_level_channel = inner_channel
+        self.noise_level_mlp = nn.Sequential(
+            PositionalEncoding(inner_channel),
+            nn.Linear(inner_channel, inner_channel * 4),
+            Swish(),
+            nn.Linear(inner_channel * 4, inner_channel)
+        )
 
         num_mults = len(channel_mults)
         pre_channel = inner_channel
@@ -194,8 +178,7 @@ class UNet(nn.Module):
         self.final_conv = Block(pre_channel, default(out_channel, in_channel), groups=norm_groups)
 
     def forward(self, x, time):
-        t = self.noise_level_mlp(time) if exists(
-            self.noise_level_mlp) else None
+        t = self.noise_level_mlp(time)
 
         feats = []
         for layer in self.downs:
@@ -355,7 +338,13 @@ class ResnetBlocWithAttn(nn.Module):
         if(self.with_attn):
             x = self.attn(x)
         return x
-    
+
+def original_to_input(original):
+    return convert_range(original, (0.,1.), (-1.,1.))
+
+def output_to_original(output):
+    return convert_range(output, (-1.,1.), (0.,1.))
+
 def exists(x):
     return x is not None
 
